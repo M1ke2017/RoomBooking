@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Pure scheduling decision logic (conflict detection, availability rules, assignment validation,
+    matching, scoring, rescheduling decisions).
+    MUST NOT reference ASP.NET Core, EF Core, PostgreSQL, RabbitMQ, gRPC, SignalR, HttpClient
+    or any other CrewCall project.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="SchedulingCore.fs" />
+  </ItemGroup>
+
+</Project>

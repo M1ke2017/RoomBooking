@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- WorkOrders module boundary: Customers, Sites, WorkOrders, Incidents (future). -->
+
+
+</Project>

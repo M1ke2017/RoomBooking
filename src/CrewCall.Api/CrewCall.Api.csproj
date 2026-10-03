@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- REST API host and composition root. Composes the modules in-process. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrewCall.WorkOrders\CrewCall.WorkOrders.csproj" />
+    <ProjectReference Include="..\CrewCall.Workforce\CrewCall.Workforce.csproj" />
+    <ProjectReference Include="..\CrewCall.Resources\CrewCall.Resources.csproj" />
+    <ProjectReference Include="..\CrewCall.Scheduling\CrewCall.Scheduling.csproj" />
+  </ItemGroup>
+
+</Project>
