@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Scheduling module boundary: Visits, Assignments, scheduling orchestration (future). Delegates decisions to the pure F# Scheduling.Core. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrewCall.Scheduling.Core\CrewCall.Scheduling.Core.fsproj" />
+    <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

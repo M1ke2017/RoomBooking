@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Persistence infrastructure: EF Core / PostgreSQL configuration (future). Intentionally not referenced yet. -->
+
+
+</Project>

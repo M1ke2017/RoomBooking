@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Module-neutral contracts (events, requests, responses) shared across module boundaries. Transport-agnostic: no RabbitMQ / gRPC / HTTP types here. -->
+
+
+</Project>
