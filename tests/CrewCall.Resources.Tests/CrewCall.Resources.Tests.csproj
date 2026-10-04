@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Resources module tests: services wired as in production, against a real PostgreSQL (Testcontainers; requires Docker). -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CrewCall.Resources\CrewCall.Resources.csproj" />
+    <ProjectReference Include="..\..\src\CrewCall.Persistence\CrewCall.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

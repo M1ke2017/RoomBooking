@@ -26,10 +26,8 @@ internal static class TechnicianEndpoints
         {
             CreateTechnicianOutcome.Created created => TypedResults.Created((string?)null, created.Technician.ToResponse()),
             CreateTechnicianOutcome.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
-            CreateTechnicianOutcome.EmailAlreadyExists duplicate => TypedResults.Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Technician email already exists",
-                detail: $"A technician with email '{duplicate.Email}' already exists."),
+            CreateTechnicianOutcome.EmailAlreadyExists duplicate => ApiProblems.Conflict(
+                "Technician email already exists", $"A technician with email '{duplicate.Email}' already exists."),
             _ => throw new InvalidOperationException($"Unhandled outcome {outcome.GetType().Name}.")
         };
     }
@@ -41,5 +39,5 @@ internal static class TechnicianEndpoints
     }
 
     internal static TechnicianResponse ToResponse(this Technician technician) =>
-        new(technician.Id, technician.DisplayName, technician.Email, technician.IsActive);
+        new(technician.Id, technician.DisplayName, technician.Email, technician.IsActive, technician.TeamId);
 }

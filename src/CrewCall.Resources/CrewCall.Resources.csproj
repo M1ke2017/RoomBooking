@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Resources module boundary: Vehicles, Equipment, resource availability (future). -->
+  <!-- Resources module boundary: Vehicles and Equipment (Sprint 3); resource availability later. -->
 
+  <ItemGroup>
+    <!-- EF Core only for DbSet<T> in IResourcesDbContext. Mapping lives in CrewCall.Persistence. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
 
 </Project>

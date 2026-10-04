@@ -1,3 +1,5 @@
+using CrewCall.Workforce.Skills;
+using CrewCall.Workforce.Teams;
 using CrewCall.Workforce.Technicians;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,6 +11,8 @@ public static class WorkforceModule
     public static IServiceCollection AddWorkforceModule(this IServiceCollection services)
     {
         services.AddScoped<TechnicianService>();
+        services.AddScoped<SkillService>();
+        services.AddScoped<TeamService>();
         return services;
     }
 }
