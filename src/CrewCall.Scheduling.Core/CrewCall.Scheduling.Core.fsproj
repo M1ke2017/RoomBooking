@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="SchedulingCore.fs" />
+    <Compile Include="TimeRange.fs" />
   </ItemGroup>
 
 </Project>
