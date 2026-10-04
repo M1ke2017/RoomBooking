@@ -1,3 +1,4 @@
+using System.Data.Common;
 using CrewCall.Scheduling.Checks;
 using CrewCall.Scheduling.Ports;
 using CrewCall.Scheduling.Reservations;
@@ -12,9 +13,18 @@ namespace CrewCall.Scheduling.Assignments;
 /// constraints decide races: the reservations' exclusion constraint (no double booking) and the partial unique index on
 /// active assignments (one per visit). A request that loses a race gets a conflict outcome (HTTP 409), never an error.
 /// </summary>
+/// <remarks>
+/// Two transactions inserting reservations that conflict under the exclusion constraint can each wait for the other;
+/// PostgreSQL then aborts one of them with a deadlock (40P01) instead of an exclusion violation (23P01). Either way the
+/// loser rolls back and the conflict is explained by re-running the check. If the winner has not committed yet, so the
+/// conflict is not visible, the whole check-and-claim is attempted again (at most <see cref="MaxClaimAttempts"/> times):
+/// the retried insert waits for the winner's commit and then fails with a plain exclusion violation.
+/// </remarks>
 public sealed class AssignmentService(
     ISchedulingDbContext db, IVisitSchedulingSource visits, SchedulingCheckService checks, TimeProvider clock)
 {
+    private const int MaxClaimAttempts = 3;
+
     public async Task<AssignOutcome> CreateAsync(CreateAssignment command, CancellationToken cancellationToken)
     {
         var request = new ResourceRequest(
@@ -37,7 +47,7 @@ public sealed class AssignmentService(
             return new AssignOutcome.VisitClosed(visit.VisitId, visit.State.ToString());
         }
 
-        return await InTransactionAsync(async (transaction, token) =>
+        return await WithClaimRetriesAsync<AssignOutcome>(async (transaction, token) =>
         {
             if (await ActiveAssignmentIdAsync(visit.VisitId, token) is { } activeId)
             {
@@ -59,7 +69,7 @@ public sealed class AssignmentService(
                 await db.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
             }
-            catch (DbUpdateException)
+            catch (Exception exception) when (IsRejectedWrite(exception))
             {
                 await RollBackAsync(transaction);
 
@@ -74,7 +84,7 @@ public sealed class AssignmentService(
                     return rejected;
                 }
 
-                throw;
+                return null; // not explainable yet (the winner may not have committed): attempt again
             }
 
             return new AssignOutcome.Assigned(assignment);
@@ -108,7 +118,7 @@ public sealed class AssignmentService(
             return new AssignOutcome.VisitClosed(visit.VisitId, visit.State.ToString());
         }
 
-        return await InTransactionAsync(async (transaction, token) =>
+        return await WithClaimRetriesAsync<AssignOutcome>(async (transaction, token) =>
         {
             var current = await db.Assignments
                 .Include(assignment => assignment.Equipment)
@@ -148,7 +158,7 @@ public sealed class AssignmentService(
                 await db.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);
             }
-            catch (DbUpdateException)
+            catch (Exception exception) when (IsRejectedWrite(exception))
             {
                 await RollBackAsync(transaction);
 
@@ -163,7 +173,7 @@ public sealed class AssignmentService(
                     return rejected;
                 }
 
-                throw;
+                return null; // not explainable yet: attempt again
             }
 
             return new AssignOutcome.Assigned(replacement);
@@ -181,7 +191,7 @@ public sealed class AssignmentService(
             return new CancelAssignmentOutcome.VisitNotFound(visitId);
         }
 
-        return await InTransactionAsync<CancelAssignmentOutcome>(async (transaction, token) =>
+        return await WithClaimRetriesAsync<CancelAssignmentOutcome>(async (transaction, token) =>
         {
             var current = await db.Assignments
                 .Include(assignment => assignment.Equipment)
@@ -214,6 +224,11 @@ public sealed class AssignmentService(
             {
                 await RollBackAsync(transaction);
                 return new CancelAssignmentOutcome.ConcurrentChange(visitId);
+            }
+            catch (Exception exception) when (IsRejectedWrite(exception))
+            {
+                await RollBackAsync(transaction);
+                return null; // e.g. a deadlock with a concurrent claim: attempt again
             }
 
             return new CancelAssignmentOutcome.Cancelled(current);
@@ -367,6 +382,38 @@ public sealed class AssignmentService(
             .Where(assignment => assignment.VisitId == visitId && assignment.Status == AssignmentStatus.Active)
             .Select(assignment => (Guid?)assignment.Id)
             .SingleOrDefaultAsync(token);
+
+    /// <summary>
+    /// Runs <paramref name="attempt"/> (one transaction each) until it produces an outcome; null means the database rejected
+    /// the write for a reason not yet visible to a re-check, and the attempt is repeated.
+    /// </summary>
+    private async Task<TOutcome> WithClaimRetriesAsync<TOutcome>(
+        Func<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction, CancellationToken, Task<TOutcome?>> attempt,
+        CancellationToken cancellationToken)
+        where TOutcome : class
+    {
+        for (var attemptNumber = 1; ; attemptNumber++)
+        {
+            if (await InTransactionAsync(attempt, cancellationToken) is { } outcome)
+            {
+                return outcome;
+            }
+
+            if (attemptNumber >= MaxClaimAttempts)
+            {
+                throw new InvalidOperationException(
+                    $"The resource claim was rejected by the database {MaxClaimAttempts} times without an identifiable conflict.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A write the database refused: a constraint violation, a deadlock or a serialization failure, possibly wrapped by the
+    /// execution strategy (which reports transient failures as InvalidOperationException).
+    /// </summary>
+    private static bool IsRejectedWrite(Exception exception) =>
+        exception is DbUpdateException or DbException
+        || exception is InvalidOperationException { InnerException: DbUpdateException or DbException };
 
     /// <summary>
     /// Runs <paramref name="operation"/> in one database transaction under the context's execution strategy (which may

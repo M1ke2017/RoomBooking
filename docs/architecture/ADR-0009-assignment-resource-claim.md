@@ -32,6 +32,12 @@ concurrency, not just in sequence.
 
    A request that loses a race rolls back completely and gets **409** with the reasons (re-evaluated after the
    rollback, so they name the winner's reservation), never 500. Nothing is locked in memory.
+
+   Two transactions inserting conflicting rows under an exclusion constraint can wait for each other. PostgreSQL then
+   aborts one of them with a deadlock (`40P01`) rather than an exclusion violation (`23P01`). Both count as a lost race.
+   If the conflict is not visible yet, because the winner has not committed, the whole check-and-claim is attempted
+   again, at most 3 times. The retried insert waits for the winner's commit and then fails with a plain exclusion
+   violation, which is explained and returned as 409.
 4. **Reservations use the buffered window.**
    - An assignment reserves `[visit start - before buffer, visit end + after buffer)`, the same window the check
      tested. The buffer is not a separate reservation.
