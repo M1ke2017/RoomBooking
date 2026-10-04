@@ -32,3 +32,23 @@ module TimeRange =
     /// Ranges that only touch (one ends exactly when the other starts) do not overlap.
     let overlaps (a: TimeRange) (b: TimeRange) : bool =
         a.Start < b.End && a.End > b.Start
+
+    /// True when `inner` lies entirely within `outer` (boundaries included): outer.Start <= inner.Start and
+    /// inner.End <= outer.End.
+    let contains (outer: TimeRange) (inner: TimeRange) : bool =
+        outer.Start <= inner.Start && inner.End <= outer.End
+
+    /// True when one range ends exactly when the other starts. Touching ranges do not overlap, but together they form
+    /// one continuous period.
+    let touches (a: TimeRange) (b: TimeRange) : bool =
+        a.End = b.Start || b.End = a.Start
+
+    /// The single range covering both, when they overlap or touch; None when there is a gap between them.
+    /// The result keeps the UTC offset of whichever value it takes its start and end from.
+    let merge (a: TimeRange) (b: TimeRange) : TimeRange option =
+        if overlaps a b || touches a b then
+            Some
+                { start = (if a.Start <= b.Start then a.Start else b.Start)
+                  finish = (if a.End >= b.End then a.End else b.End) }
+        else
+            None

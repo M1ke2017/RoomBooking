@@ -13,6 +13,11 @@
 
   <ItemGroup>
     <Compile Include="TimeRange.fs" />
+    <Compile Include="Ranges.fs" />
+    <Compile Include="Skills.fs" />
+    <Compile Include="Availability.fs" />
+    <Compile Include="Candidate.fs" />
+    <Compile Include="Feasibility.fs" />
   </ItemGroup>
 
 </Project>
