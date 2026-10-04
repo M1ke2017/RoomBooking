@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Workforce module boundary: Technicians, Teams, Skills, working hours, absences, availability (future). -->
+  <!-- Workforce module boundary: Technicians (Sprint 2); Teams, Skills, working hours, absences, availability later. -->
 
+  <ItemGroup>
+    <!-- EF Core only for DbSet<T> in IWorkforceDbContext. Mapping lives in CrewCall.Persistence. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
 
 </Project>

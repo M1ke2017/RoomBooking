@@ -4,7 +4,7 @@ using Xunit;
 
 namespace CrewCall.Api.Tests;
 
-public sealed class HealthEndpointTests(CrewCallApiFactory factory) : IClassFixture<CrewCallApiFactory>
+public sealed class HealthEndpointTests(CrewCallApiFactory factory)
 {
     [Fact]
     public async Task Health_returns_200_and_a_healthy_database_check_when_the_database_is_reachable()

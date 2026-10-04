@@ -5,6 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CrewCall.ServiceDefaults\CrewCall.ServiceDefaults.csproj" />
     <ProjectReference Include="..\CrewCall.Persistence\CrewCall.Persistence.csproj" />
+    <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
     <ProjectReference Include="..\CrewCall.WorkOrders\CrewCall.WorkOrders.csproj" />
     <ProjectReference Include="..\CrewCall.Workforce\CrewCall.Workforce.csproj" />
     <ProjectReference Include="..\CrewCall.Resources\CrewCall.Resources.csproj" />
