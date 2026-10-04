@@ -14,9 +14,15 @@ internal static class ApiTestData
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
-    public static async Task<Guid> CreateTechnicianAsync(HttpClient client) =>
+    private static int _holidayDateSequence;
+
+    public static async Task<Guid> CreateTechnicianAsync(
+        HttpClient client, string timeZoneId = "Europe/Warsaw", string countryCode = "PL", bool? isActive = null) =>
         (await PostAsync<TechnicianResponse>(client, "/api/technicians",
-            new CreateTechnicianRequest("Technician", $"tech-{Guid.NewGuid():N}@crewcall.test", null))).Id;
+            new CreateTechnicianRequest("Technician", $"tech-{Guid.NewGuid():N}@crewcall.test", isActive, timeZoneId, countryCode))).Id;
+
+    /// <summary>A far-future date no other test uses: holidays apply to every technician of a country.</summary>
+    public static DateOnly UniqueHolidayDate() => new DateOnly(2200, 1, 1).AddDays(Interlocked.Increment(ref _holidayDateSequence));
 
     public static async Task<Guid> CreateSkillAsync(HttpClient client) =>
         (await PostAsync<SkillResponse>(client, "/api/skills",

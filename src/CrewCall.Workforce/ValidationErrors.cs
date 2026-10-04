@@ -43,6 +43,26 @@ internal sealed class ValidationErrors
         return text;
     }
 
+    /// <summary>Parses an enum by name (case-insensitive). Only letters: numbers ("7") and combinations ("A, B") are rejected.</summary>
+    public TEnum? EnumValue<TEnum>(string field, string? value)
+        where TEnum : struct, Enum
+    {
+        var text = Normalize(value);
+        if (text is null)
+        {
+            Add(field, "Required.");
+            return null;
+        }
+
+        if (text.All(char.IsAsciiLetter) && Enum.TryParse<TEnum>(text, ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+
+        Add(field, $"Must be one of: {string.Join(", ", Enum.GetNames<TEnum>())}.");
+        return null;
+    }
+
     public IReadOnlyDictionary<string, string[]> ToDictionary() =>
         _errors.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray());
 

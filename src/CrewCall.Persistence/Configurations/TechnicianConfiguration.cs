@@ -9,7 +9,8 @@ internal sealed class TechnicianConfiguration : IEntityTypeConfiguration<Technic
 {
     public void Configure(EntityTypeBuilder<Technician> builder)
     {
-        builder.ToTable("technicians", DatabaseSchemas.Workforce);
+        builder.ToTable("technicians", DatabaseSchemas.Workforce, table =>
+            table.HasCheckConstraint("ck_technicians_country_code", "country_code ~ '^[A-Z]{2}$'"));
 
         builder.HasKey(technician => technician.Id);
         builder.Property(technician => technician.Id).HasColumnName("id").ValueGeneratedNever();
@@ -30,6 +31,18 @@ internal sealed class TechnicianConfiguration : IEntityTypeConfiguration<Technic
         // would store true. The Workforce module applies the default (active) instead.
         builder.Property(technician => technician.IsActive)
             .HasColumnName("is_active")
+            .IsRequired();
+
+        // IANA id, validated against the TZDB by the Workforce module (the database cannot check zone ids).
+        builder.Property(technician => technician.TimeZoneId)
+            .HasColumnName("timezone_id")
+            .HasMaxLength(Technician.TimeZoneIdMaxLength)
+            .IsRequired();
+
+        builder.Property(technician => technician.CountryCode)
+            .HasColumnName("country_code")
+            .HasMaxLength(Technician.CountryCodeLength)
+            .IsFixedLength()
             .IsRequired();
 
         // Technician -> 0..1 Team. Restrict: a team with members cannot be deleted by accident.

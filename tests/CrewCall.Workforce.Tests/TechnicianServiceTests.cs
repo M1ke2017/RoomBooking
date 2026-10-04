@@ -17,7 +17,7 @@ public sealed class TechnicianServiceTests(WorkforceDatabase database)
         var technicians = scope.ServiceProvider.GetRequiredService<TechnicianService>();
         var email = UniqueEmail();
 
-        var outcome = await technicians.CreateAsync(new CreateTechnician(" Anna Kowalska ", email.ToUpperInvariant(), null), Cancellation);
+        var outcome = await technicians.CreateAsync(new CreateTechnician(" Anna Kowalska ", email.ToUpperInvariant(), null, "Europe/Warsaw", "PL"), Cancellation);
 
         var created = Assert.IsType<CreateTechnicianOutcome.Created>(outcome);
         Assert.Equal("Anna Kowalska", created.Technician.DisplayName);
@@ -32,7 +32,7 @@ public sealed class TechnicianServiceTests(WorkforceDatabase database)
         await using (var scope = database.CreateScope())
         {
             var outcome = await scope.ServiceProvider.GetRequiredService<TechnicianService>()
-                .CreateAsync(new CreateTechnician("Jan Nowak", email, IsActive: false), Cancellation);
+                .CreateAsync(new CreateTechnician("Jan Nowak", email, IsActive: false, "Europe/Warsaw", "PL"), Cancellation);
             Assert.IsType<CreateTechnicianOutcome.Created>(outcome);
         }
 
@@ -51,7 +51,7 @@ public sealed class TechnicianServiceTests(WorkforceDatabase database)
         await using var scope = database.CreateScope();
         var technicians = scope.ServiceProvider.GetRequiredService<TechnicianService>();
 
-        var outcome = await technicians.CreateAsync(new CreateTechnician(displayName, UniqueEmail(), null), Cancellation);
+        var outcome = await technicians.CreateAsync(new CreateTechnician(displayName, UniqueEmail(), null, "Europe/Warsaw", "PL"), Cancellation);
 
         var invalid = Assert.IsType<CreateTechnicianOutcome.Invalid>(outcome);
         Assert.Contains("displayName", invalid.Errors.Keys);
@@ -69,7 +69,7 @@ public sealed class TechnicianServiceTests(WorkforceDatabase database)
         await using var scope = database.CreateScope();
         var technicians = scope.ServiceProvider.GetRequiredService<TechnicianService>();
 
-        var outcome = await technicians.CreateAsync(new CreateTechnician("Anna Kowalska", email, null), Cancellation);
+        var outcome = await technicians.CreateAsync(new CreateTechnician("Anna Kowalska", email, null, "Europe/Warsaw", "PL"), Cancellation);
 
         var invalid = Assert.IsType<CreateTechnicianOutcome.Invalid>(outcome);
         Assert.Contains("email", invalid.Errors.Keys);
@@ -82,11 +82,64 @@ public sealed class TechnicianServiceTests(WorkforceDatabase database)
         var technicians = scope.ServiceProvider.GetRequiredService<TechnicianService>();
         var email = UniqueEmail();
         Assert.IsType<CreateTechnicianOutcome.Created>(
-            await technicians.CreateAsync(new CreateTechnician("First", email, null), Cancellation));
+            await technicians.CreateAsync(new CreateTechnician("First", email, null, "Europe/Warsaw", "PL"), Cancellation));
 
-        var outcome = await technicians.CreateAsync(new CreateTechnician("Second", email.ToUpperInvariant(), null), Cancellation);
+        var outcome = await technicians.CreateAsync(new CreateTechnician("Second", email.ToUpperInvariant(), null, "Europe/Warsaw", "PL"), Cancellation);
 
         var duplicate = Assert.IsType<CreateTechnicianOutcome.EmailAlreadyExists>(outcome);
         Assert.Equal(email, duplicate.Email);
+    }
+
+    [Fact]
+    public async Task Create_persists_the_time_zone_and_an_upper_case_country_code()
+    {
+        var email = UniqueEmail();
+        await using (var scope = database.CreateScope())
+        {
+            var outcome = await scope.ServiceProvider.GetRequiredService<TechnicianService>()
+                .CreateAsync(new CreateTechnician("Maria Lopez", email, null, " America/New_York ", "us"), Cancellation);
+            Assert.IsType<CreateTechnicianOutcome.Created>(outcome);
+        }
+
+        await using var readScope = database.CreateScope();
+        var saved = (await readScope.ServiceProvider.GetRequiredService<TechnicianService>().ListAsync(Cancellation))
+            .Single(technician => technician.Email == email);
+        Assert.Equal("America/New_York", saved.TimeZoneId);
+        Assert.Equal("US", saved.CountryCode);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("  ")]
+    [InlineData("Mars/Olympus_Mons")]
+    [InlineData("Central European Standard Time")]
+    [InlineData("+02:00")]
+    [InlineData("europe/warsaw")]
+    public async Task Create_rejects_a_missing_or_non_IANA_time_zone(string? timeZoneId)
+    {
+        await using var scope = database.CreateScope();
+        var technicians = scope.ServiceProvider.GetRequiredService<TechnicianService>();
+
+        var outcome = await technicians.CreateAsync(new CreateTechnician("Anna Kowalska", UniqueEmail(), null, timeZoneId, "PL"), Cancellation);
+
+        var invalid = Assert.IsType<CreateTechnicianOutcome.Invalid>(outcome);
+        Assert.Equal(["timeZoneId"], invalid.Errors.Keys);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("P")]
+    [InlineData("POL")]
+    [InlineData("XX")]
+    [InlineData("1A")]
+    public async Task Create_rejects_a_missing_or_unknown_country_code(string? countryCode)
+    {
+        await using var scope = database.CreateScope();
+        var technicians = scope.ServiceProvider.GetRequiredService<TechnicianService>();
+
+        var outcome = await technicians.CreateAsync(new CreateTechnician("Anna Kowalska", UniqueEmail(), null, "Europe/Warsaw", countryCode), Cancellation);
+
+        var invalid = Assert.IsType<CreateTechnicianOutcome.Invalid>(outcome);
+        Assert.Equal(["countryCode"], invalid.Errors.Keys);
     }
 }

@@ -20,7 +20,7 @@ internal static class TechnicianEndpoints
         CreateTechnicianRequest request, TechnicianService technicians, CancellationToken cancellationToken)
     {
         var outcome = await technicians.CreateAsync(
-            new CreateTechnician(request.DisplayName, request.Email, request.IsActive), cancellationToken);
+            new CreateTechnician(request.DisplayName, request.Email, request.IsActive, request.TimeZoneId, request.CountryCode), cancellationToken);
 
         return outcome switch
         {
@@ -39,5 +39,6 @@ internal static class TechnicianEndpoints
     }
 
     internal static TechnicianResponse ToResponse(this Technician technician) =>
-        new(technician.Id, technician.DisplayName, technician.Email, technician.IsActive, technician.TeamId);
+        new(technician.Id, technician.DisplayName, technician.Email, technician.IsActive, technician.TeamId,
+            technician.TimeZoneId, technician.CountryCode);
 }
