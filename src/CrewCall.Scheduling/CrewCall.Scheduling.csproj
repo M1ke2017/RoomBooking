@@ -1,10 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Scheduling module boundary: Visits, Assignments, scheduling orchestration (future). Delegates decisions to the pure F# Scheduling.Core. -->
+  <!--
+    Scheduling module boundary (C#): orchestration and adapters around the pure F# Scheduling.Core.
+    Sprint 6B: resource reservations and the read-only scheduling check. Assignments come later.
+    Other modules are reached only through ports (Ports/), implemented by the composition root (ADR-0001).
+  -->
 
   <ItemGroup>
     <ProjectReference Include="..\CrewCall.Scheduling.Core\CrewCall.Scheduling.Core.fsproj" />
     <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- EF Core only for DbSet<T> in ISchedulingDbContext. Mapping lives in CrewCall.Persistence. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- Explicit: this C# project builds F# types (lists, sets, options) for Scheduling.Core directly. -->
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets tests write reservations directly to prove the database constraint (the constructor is module-internal). -->
+    <InternalsVisibleTo Include="CrewCall.Scheduling.Tests" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,8 @@
 using CrewCall.Api.Endpoints;
+using CrewCall.Api.SchedulingAdapters;
 using CrewCall.Persistence;
 using CrewCall.Resources;
+using CrewCall.Scheduling;
 using CrewCall.WorkOrders;
 using CrewCall.Workforce;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +29,8 @@ builder.Services.AddHealthChecks()
 builder.Services.AddWorkOrdersModule();
 builder.Services.AddWorkforceModule();
 builder.Services.AddResourcesModule();
+builder.Services.AddSchedulingModule();
+builder.Services.AddSchedulingAdapters();
 
 var app = builder.Build();
 
@@ -57,6 +61,7 @@ app.MapEquipmentEndpoints();
 app.MapWorkOrderEndpoints();
 app.MapVisitEndpoints();
 app.MapOperationsEndpoints();
+app.MapSchedulingEndpoints();
 
 app.MapDefaultEndpoints();
 

@@ -16,6 +16,7 @@
     <ProjectReference Include="..\CrewCall.WorkOrders\CrewCall.WorkOrders.csproj" />
     <ProjectReference Include="..\CrewCall.Workforce\CrewCall.Workforce.csproj" />
     <ProjectReference Include="..\CrewCall.Resources\CrewCall.Resources.csproj" />
+    <ProjectReference Include="..\CrewCall.Scheduling\CrewCall.Scheduling.csproj" />
   </ItemGroup>
 
 </Project>

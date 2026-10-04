@@ -4,6 +4,8 @@ using CrewCall.Persistence.Operations;
 using CrewCall.Resources;
 using CrewCall.Resources.Equipment;
 using CrewCall.Resources.Vehicles;
+using CrewCall.Scheduling;
+using CrewCall.Scheduling.Reservations;
 using CrewCall.WorkOrders;
 using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Sites;
@@ -25,7 +27,7 @@ namespace CrewCall.Persistence;
 /// Entity mapping lives in <c>Configurations/</c>, one <see cref="IEntityTypeConfiguration{TEntity}"/> per entity.
 /// </summary>
 public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> options)
-    : DbContext(options), IWorkOrdersDbContext, IWorkforceDbContext, IResourcesDbContext
+    : DbContext(options), IWorkOrdersDbContext, IWorkforceDbContext, IResourcesDbContext, ISchedulingDbContext
 {
     private static readonly JsonSerializerOptions _payloadJsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -59,6 +61,8 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
     public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
+
+    public DbSet<ResourceReservation> ResourceReservations => Set<ResourceReservation>();
 
     /// <inheritdoc cref="IWorkOrdersDbContext.AppendOperationalEvent"/>
     /// <remarks>
