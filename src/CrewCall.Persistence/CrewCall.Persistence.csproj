@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Persistence infrastructure: EF Core / PostgreSQL configuration (future). Intentionally not referenced yet. -->
+  <!-- Persistence infrastructure: EF Core + PostgreSQL (Npgsql). One physical database, module-owned schemas (ADR-0004). -->
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
 
 </Project>

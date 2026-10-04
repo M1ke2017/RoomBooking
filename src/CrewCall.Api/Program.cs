@@ -1,7 +1,40 @@
+using CrewCall.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+builder.Services.AddProblemDetails();
+builder.Services.AddOpenApi();
+
+// The connection string comes from configuration. When run through the AppHost, Aspire supplies it.
+var connectionString = builder.Configuration.GetConnectionString(PersistenceServiceCollectionExtensions.ConnectionStringName)
+    ?? throw new InvalidOperationException(
+        $"Connection string '{PersistenceServiceCollectionExtensions.ConnectionStringName}' is not configured. Run CrewCall through CrewCall.AppHost.");
+
+builder.Services.AddCrewCallPersistence(connectionString);
+
+// Aspire enrichment: retries, OpenTelemetry. The health check is registered explicitly so it has a stable name.
+builder.EnrichNpgsqlDbContext<CrewCallDbContext>(settings => settings.DisableHealthChecks = true);
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<CrewCallDbContext>("database");
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+
+    // Development only: apply migrations on startup. A dedicated migration step replaces this before any shared environment.
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().Database.MigrateAsync();
+}
+
 app.MapGet("/", () => "CrewCall.Api");
+
+app.MapDefaultEndpoints();
 
 app.Run();

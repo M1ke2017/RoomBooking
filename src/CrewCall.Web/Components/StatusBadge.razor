@@ -1,0 +1,14 @@
+<span class="badge badge-@State.ToString().ToLowerInvariant()">@Label</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public ComponentState State { get; set; }
+
+    private string Label => State switch
+    {
+        ComponentState.Healthy => "Healthy",
+        ComponentState.Degraded => "Degraded",
+        ComponentState.Unavailable => "Unavailable",
+        _ => "Unknown"
+    };
+}
