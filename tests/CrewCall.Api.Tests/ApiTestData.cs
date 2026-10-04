@@ -1,7 +1,10 @@
 using System.Net.Http.Json;
+using CrewCall.Contracts.Customers;
+using CrewCall.Contracts.Sites;
 using CrewCall.Contracts.Skills;
 using CrewCall.Contracts.Teams;
 using CrewCall.Contracts.Technicians;
+using CrewCall.Contracts.WorkOrders;
 using Xunit;
 
 namespace CrewCall.Api.Tests;
@@ -21,6 +24,21 @@ internal static class ApiTestData
 
     public static async Task<Guid> CreateTeamAsync(HttpClient client) =>
         (await PostAsync<TeamResponse>(client, "/api/teams", new CreateTeamRequest($"Team {Guid.NewGuid():N}", null))).Id;
+
+    public static async Task<Guid> CreateCustomerAsync(HttpClient client) =>
+        (await PostAsync<CustomerResponse>(client, "/api/customers", new CreateCustomerRequest($"Customer {Guid.NewGuid():N}", null))).Id;
+
+    public static async Task<Guid> CreateSiteAsync(HttpClient client, Guid customerId) =>
+        (await PostAsync<SiteResponse>(client, "/api/sites",
+            new CreateSiteRequest(customerId, "Plant 1", null, "Poznań", null, "PL", null, null))).Id;
+
+    public static async Task<WorkOrderResponse> CreateWorkOrderAsync(HttpClient client)
+    {
+        var customerId = await CreateCustomerAsync(client);
+        var siteId = await CreateSiteAsync(client, customerId);
+        return await PostAsync<WorkOrderResponse>(client, "/api/work-orders",
+            new CreateWorkOrderRequest(customerId, siteId, "Replace inverter", null, "High"));
+    }
 
     private static async Task<T> PostAsync<T>(HttpClient client, string url, object request)
     {

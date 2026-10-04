@@ -1,5 +1,6 @@
 using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Sites;
+using CrewCall.WorkOrders.Visits;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrewCall.WorkOrders;
@@ -13,6 +14,17 @@ public interface IWorkOrdersDbContext
     DbSet<Customer> Customers { get; }
 
     DbSet<Site> Sites { get; }
+
+    DbSet<WorkOrder> WorkOrders { get; }
+
+    DbSet<Visit> Visits { get; }
+
+    /// <summary>
+    /// Adds an operational event to the current unit of work. It is written by the next <see cref="SaveChangesAsync"/>,
+    /// in the same database transaction as the state changes it describes (ADR-0006).
+    /// </summary>
+    /// <param name="payload">A small record with only what the history needs; serialized to JSON. Never an entity.</param>
+    void AppendOperationalEvent(string eventType, string aggregateType, Guid aggregateId, DateTimeOffset occurredAtUtc, object payload);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

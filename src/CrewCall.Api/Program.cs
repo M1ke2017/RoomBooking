@@ -50,6 +50,9 @@ app.MapSkillEndpoints();
 app.MapTeamEndpoints();
 app.MapVehicleEndpoints();
 app.MapEquipmentEndpoints();
+app.MapWorkOrderEndpoints();
+app.MapVisitEndpoints();
+app.MapOperationsEndpoints();
 
 app.MapDefaultEndpoints();
 
