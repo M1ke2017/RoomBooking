@@ -1,4 +1,5 @@
 using CrewCall.Persistence.Operations;
+using CrewCall.Persistence.ReadModels.OperationalCalendar;
 using CrewCall.Resources;
 using CrewCall.Scheduling;
 using CrewCall.WorkOrders;
@@ -26,6 +27,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<ISchedulingDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
 
         services.AddScoped<OperationalEventLog>();
+        services.AddScoped<OperationalCalendarService>();
 
         return services;
     }
