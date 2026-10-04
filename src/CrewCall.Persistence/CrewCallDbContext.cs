@@ -1,9 +1,13 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CrewCall.Persistence.Operations;
 using CrewCall.Resources;
 using CrewCall.Resources.Equipment;
 using CrewCall.Resources.Vehicles;
 using CrewCall.WorkOrders;
 using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Sites;
+using CrewCall.WorkOrders.Visits;
 using CrewCall.Workforce;
 using CrewCall.Workforce.Skills;
 using CrewCall.Workforce.Teams;
@@ -20,9 +24,20 @@ namespace CrewCall.Persistence;
 public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> options)
     : DbContext(options), IWorkOrdersDbContext, IWorkforceDbContext, IResourcesDbContext
 {
+    private static readonly JsonSerializerOptions _payloadJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     public DbSet<Customer> Customers => Set<Customer>();
 
     public DbSet<Site> Sites => Set<Site>();
+
+    public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
+
+    public DbSet<Visit> Visits => Set<Visit>();
+
+    public DbSet<OperationalEvent> OperationalEvents => Set<OperationalEvent>();
 
     public DbSet<Technician> Technicians => Set<Technician>();
 
@@ -35,6 +50,22 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
     public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
+
+    /// <inheritdoc cref="IWorkOrdersDbContext.AppendOperationalEvent"/>
+    /// <remarks>
+    /// Only adds the row to the change tracker: it is inserted by the caller's next SaveChanges, which EF Core runs in one
+    /// transaction together with the state changes. There is no separate save for events.
+    /// </remarks>
+    public void AppendOperationalEvent(string eventType, string aggregateType, Guid aggregateId, DateTimeOffset occurredAtUtc, object payload)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(aggregateType);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        var payloadJson = JsonSerializer.Serialize(payload, payload.GetType(), _payloadJsonOptions);
+        OperationalEvents.Add(new OperationalEvent(
+            Guid.CreateVersion7(), occurredAtUtc, eventType, aggregateType, aggregateId, payloadJson, correlationId: null));
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CrewCallDbContext).Assembly);

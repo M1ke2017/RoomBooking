@@ -1,3 +1,4 @@
+using CrewCall.Persistence.Operations;
 using CrewCall.Resources;
 using CrewCall.WorkOrders;
 using CrewCall.Workforce;
@@ -21,6 +22,8 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IWorkOrdersDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
         services.AddScoped<IWorkforceDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
         services.AddScoped<IResourcesDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
+
+        services.AddScoped<OperationalEventLog>();
 
         return services;
     }

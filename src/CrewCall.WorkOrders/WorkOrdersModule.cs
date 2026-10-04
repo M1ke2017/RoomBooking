@@ -1,6 +1,8 @@
 using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Sites;
+using CrewCall.WorkOrders.Visits;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CrewCall.WorkOrders;
 
@@ -11,6 +13,9 @@ public static class WorkOrdersModule
     {
         services.AddScoped<CustomerService>();
         services.AddScoped<SiteService>();
+        services.AddScoped<WorkOrderService>();
+        services.AddScoped<VisitService>();
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 }
