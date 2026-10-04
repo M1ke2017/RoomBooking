@@ -1,3 +1,4 @@
+using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Reservations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -26,6 +27,13 @@ internal sealed class ResourceReservationConfiguration : IEntityTypeConfiguratio
 
         // The visit lives in the workorders schema: no foreign key across module schemas.
         builder.Property(reservation => reservation.VisitId).HasColumnName("visit_id");
+
+        // Same module and schema: a real foreign key to the assignment that claimed the reservation (null for others).
+        builder.Property(reservation => reservation.AssignmentId).HasColumnName("assignment_id");
+        builder.HasOne<Assignment>()
+            .WithMany()
+            .HasForeignKey(reservation => reservation.AssignmentId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(reservation => reservation.Start).HasColumnName("start_at").IsRequired();
         builder.Property(reservation => reservation.End).HasColumnName("end_at").IsRequired();

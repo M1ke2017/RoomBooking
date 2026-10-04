@@ -5,6 +5,7 @@ using CrewCall.Resources;
 using CrewCall.Resources.Equipment;
 using CrewCall.Resources.Vehicles;
 using CrewCall.Scheduling;
+using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Reservations;
 using CrewCall.WorkOrders;
 using CrewCall.WorkOrders.Customers;
@@ -63,6 +64,10 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
     public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
 
     public DbSet<ResourceReservation> ResourceReservations => Set<ResourceReservation>();
+
+    public DbSet<Assignment> Assignments => Set<Assignment>();
+
+    public DbSet<AssignmentEquipment> AssignmentEquipment => Set<AssignmentEquipment>();
 
     /// <inheritdoc cref="IWorkOrdersDbContext.AppendOperationalEvent"/>
     /// <remarks>

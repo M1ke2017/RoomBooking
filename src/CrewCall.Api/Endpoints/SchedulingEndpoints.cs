@@ -46,18 +46,21 @@ internal static class SchedulingEndpoints
         };
     }
 
+    internal static SchedulingConflictResponse ToConflictResponse(SchedulingConflict reason) =>
+        new(
+            reason.Code.ToString(),
+            reason.Message,
+            reason.ResourceType?.ToString(),
+            reason.RelatedResourceId,
+            reason.ReservationId,
+            reason.ReservedStart,
+            reason.ReservedEnd,
+            reason.Details.ToArray());
+
     private static SchedulingCheckResponse ToResponse(this SchedulingCheckResult result) =>
         new(
             result.IsFeasible,
-            result.Reasons.Select(reason => new SchedulingConflictResponse(
-                reason.Code.ToString(),
-                reason.Message,
-                reason.ResourceType?.ToString(),
-                reason.RelatedResourceId,
-                reason.ReservationId,
-                reason.ReservedStart,
-                reason.ReservedEnd,
-                reason.Details.ToArray())).ToArray(),
+            result.Reasons.Select(ToConflictResponse).ToArray(),
             result.TechnicianId,
             result.VehicleId,
             result.EquipmentIds.ToArray(),

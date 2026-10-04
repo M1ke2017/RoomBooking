@@ -7,6 +7,13 @@ namespace CrewCall.Scheduling.Tests;
 public sealed class FakeTechnicianSource : ITechnicianSchedulingSource
 {
     private readonly ConcurrentDictionary<Guid, TechnicianSchedulingProfile> _profiles = new();
+    private readonly ConcurrentDictionary<Guid, Gate> _gates = new();
+
+    /// <summary>
+    /// Holds the first <paramref name="callers"/> profile lookups for the technician until all of them have arrived, so
+    /// concurrent requests pass the check together and race to claim (the database must then decide).
+    /// </summary>
+    public void GateProfileLookups(Guid technicianId, int callers) => _gates[technicianId] = new Gate(callers);
 
     /// <summary>Registers a technician whose Workforce answer is the same for every interval.</summary>
     public Guid Add(
@@ -20,9 +27,32 @@ public sealed class FakeTechnicianSource : ITechnicianSchedulingSource
         return id;
     }
 
-    public Task<TechnicianSchedulingProfile?> GetProfileAsync(
-        Guid technicianId, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken) =>
-        Task.FromResult(_profiles.GetValueOrDefault(technicianId));
+    public async Task<TechnicianSchedulingProfile?> GetProfileAsync(
+        Guid technicianId, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken)
+    {
+        if (_gates.TryGetValue(technicianId, out var gate))
+        {
+            await gate.ArriveAsync(cancellationToken);
+        }
+
+        return _profiles.GetValueOrDefault(technicianId);
+    }
+
+    private sealed class Gate(int callers)
+    {
+        private readonly TaskCompletionSource _open = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _remaining = callers;
+
+        public Task ArriveAsync(CancellationToken cancellationToken)
+        {
+            if (Interlocked.Decrement(ref _remaining) <= 0)
+            {
+                _open.TrySetResult();
+            }
+
+            return _open.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+        }
+    }
 
     public Task<bool> ExistsAsync(Guid technicianId, CancellationToken cancellationToken) =>
         Task.FromResult(_profiles.ContainsKey(technicianId));
@@ -54,4 +84,20 @@ public sealed class FakeResourceCatalog : IResourceCatalog
     public Task<IReadOnlyCollection<Guid>> FindMissingEquipmentAsync(
         IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Guid>>(equipmentIds.Where(id => !_equipment.ContainsKey(id)).ToList());
+}
+
+/// <summary>Stands in for WorkOrders' visits.</summary>
+public sealed class FakeVisitSource : IVisitSchedulingSource
+{
+    private readonly ConcurrentDictionary<Guid, VisitSchedulingInfo> _visits = new();
+
+    public Guid Add(DateTimeOffset start, DateTimeOffset end, VisitState state = VisitState.Planned)
+    {
+        var id = Guid.NewGuid();
+        _visits[id] = new VisitSchedulingInfo(id, start, end, state);
+        return id;
+    }
+
+    public Task<VisitSchedulingInfo?> GetVisitAsync(Guid visitId, CancellationToken cancellationToken) =>
+        Task.FromResult(_visits.GetValueOrDefault(visitId));
 }
