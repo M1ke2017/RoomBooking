@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Scheduling module tests: reservations and the scheduling check against a real PostgreSQL (Testcontainers; requires
+    Docker). The Workforce and Resources ports are faked here; the real adapters are tested in CrewCall.Api.Tests.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CrewCall.Scheduling\CrewCall.Scheduling.csproj" />
+    <ProjectReference Include="..\..\src\CrewCall.Persistence\CrewCall.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

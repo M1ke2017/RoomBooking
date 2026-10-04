@@ -105,3 +105,28 @@ let ``a candidate is feasible exactly when no check fails`` (candidate: Scheduli
     match Feasibility.evaluateCandidate candidate requirement with
     | Feasible -> expectedFeasible
     | Rejected reasons -> not expectedFeasible && not (List.isEmpty reasons)
+
+[<Property(Arbitrary = [| typeof<SchedulingArbitraries> |], MaxTest = 500)>]
+let ``conflict detection does not depend on booking order and never reports touching bookings``
+    (visit: TimeRange)
+    (ranges: TimeRange list)
+    =
+    let resource = { Kind = Technician; ResourceId = Guid.Parse "0199b2a0-0000-7000-8000-000000000003" }
+
+    let bookings =
+        ranges
+        |> List.mapi (fun index range ->
+            { BookingId = Guid(index, 0s, 0s, Array.zeroCreate 8)
+              Resource = resource
+              Range = range
+              VisitId = None })
+
+    let detect bookings = ResourceConflicts.detect [ resource ] visit visit None bookings
+    let conflicts = detect bookings
+
+    conflicts = detect (List.rev bookings)
+    && conflicts
+       |> List.forall (function
+           | BookingOverlap booking -> TimeRange.overlaps booking.Range visit
+           | TravelBufferOverlap _ -> false)
+    && List.length conflicts = (ranges |> List.filter (TimeRange.overlaps visit) |> List.length)
