@@ -11,7 +11,8 @@ namespace CrewCall.Scheduling.Tests;
 
 /// <summary>
 /// A migrated PostgreSQL shared by the tests in this assembly, with the Scheduling module wired as in production except
-/// for its ports: <see cref="Technicians"/> and <see cref="Resources"/> stand in for Workforce and Resources.
+/// for its ports: <see cref="Technicians"/>, <see cref="Resources"/> and <see cref="Visits"/> stand in for Workforce,
+/// Resources and WorkOrders.
 /// </summary>
 public sealed class SchedulingDatabase : IAsyncLifetime
 {
@@ -22,6 +23,8 @@ public sealed class SchedulingDatabase : IAsyncLifetime
 
     public FakeResourceCatalog Resources { get; } = new();
 
+    public FakeVisitSource Visits { get; } = new();
+
     public async ValueTask InitializeAsync()
     {
         await _postgres.StartAsync();
@@ -31,6 +34,7 @@ public sealed class SchedulingDatabase : IAsyncLifetime
             .AddSchedulingModule()
             .AddSingleton<ITechnicianSchedulingSource>(Technicians)
             .AddSingleton<IResourceCatalog>(Resources)
+            .AddSingleton<IVisitSchedulingSource>(Visits)
             .BuildServiceProvider();
 
         await using var scope = _services.CreateAsyncScope();

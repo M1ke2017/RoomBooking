@@ -18,8 +18,10 @@ public enum ResourceType
 /// </remarks>
 public sealed class ResourceReservation
 {
-    internal ResourceReservation(Guid id, ResourceType resourceType, Guid resourceId, Guid? visitId, DateTimeOffset start, DateTimeOffset end)
+    internal ResourceReservation(
+        Guid id, ResourceType resourceType, Guid resourceId, Guid? visitId, DateTimeOffset start, DateTimeOffset end, Guid? assignmentId = null)
     {
+        AssignmentId = assignmentId;
         Id = id;
         ResourceType = resourceType;
         ResourceId = resourceId;
@@ -35,6 +37,9 @@ public sealed class ResourceReservation
     public Guid ResourceId { get; private set; }
 
     public Guid? VisitId { get; private set; }
+
+    /// <summary>The assignment that claimed this reservation; null for reservations made outside an assignment.</summary>
+    public Guid? AssignmentId { get; private set; }
 
     /// <summary>UTC.</summary>
     public DateTimeOffset Start { get; private set; }

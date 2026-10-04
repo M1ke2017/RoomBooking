@@ -62,6 +62,7 @@ app.MapWorkOrderEndpoints();
 app.MapVisitEndpoints();
 app.MapOperationsEndpoints();
 app.MapSchedulingEndpoints();
+app.MapAssignmentEndpoints();
 
 app.MapDefaultEndpoints();
 
