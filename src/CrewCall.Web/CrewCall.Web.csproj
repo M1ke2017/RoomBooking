@@ -1,10 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- Blazor WebAssembly client. Technical shell only in Sprint 1; talks to CrewCall.Api over HTTP, no project references. -->
+  <!--
+    Blazor Web App (server-hosted, static server-side rendering).
+    Talks to CrewCall.Api over HTTP using Aspire service discovery. No project references to modules.
+  -->
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
+    <ProjectReference Include="..\CrewCall.ServiceDefaults\CrewCall.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

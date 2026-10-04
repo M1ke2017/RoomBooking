@@ -1,0 +1,20 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+
+  <!-- Local orchestration of the full CrewCall environment. The single entry point for running CrewCall locally. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <UserSecretsId>88e738aa-cab3-4f75-909d-8d1495c78c98</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrewCall.Api\CrewCall.Api.csproj" />
+    <ProjectReference Include="..\CrewCall.Web\CrewCall.Web.csproj" />
+  </ItemGroup>
+
+</Project>

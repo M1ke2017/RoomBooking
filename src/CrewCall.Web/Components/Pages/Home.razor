@@ -1,0 +1,57 @@
+@page "/"
+@attribute [StreamRendering]
+@inject SystemStatusClient StatusClient
+
+<PageTitle>CrewCall · System Status</PageTitle>
+
+<section class="panel" aria-labelledby="system-status">
+    <div class="panel-header">
+        <h1 id="system-status">System Status</h1>
+        <a class="refresh" href="/">Refresh</a>
+    </div>
+
+    @if (status is null)
+    {
+        <p class="muted">Checking…</p>
+    }
+    else
+    {
+        <table class="status-table">
+            <thead>
+                <tr>
+                    <th scope="col">Component</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>API</td>
+                    <td><StatusBadge State="status.Api.State" /></td>
+                    <td class="detail">@status.Api.Detail</td>
+                </tr>
+                <tr>
+                    <td>Database</td>
+                    <td><StatusBadge State="status.Database.State" /></td>
+                    <td class="detail">@status.Database.Detail</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <dl class="meta">
+            <dt>API service</dt>
+            <dd><code>@status.ApiService</code></dd>
+            <dt>Checked at</dt>
+            <dd>@status.CheckedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</dd>
+        </dl>
+    }
+</section>
+
+@code {
+    private SystemStatus? status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        status = await StatusClient.GetAsync();
+    }
+}
