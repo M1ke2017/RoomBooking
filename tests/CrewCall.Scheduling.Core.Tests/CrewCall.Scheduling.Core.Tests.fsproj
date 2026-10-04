@@ -8,8 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TestRanges.fs" />
     <Compile Include="TimeRangeTests.fs" />
     <Compile Include="TimeRangePropertyTests.fs" />
+    <Compile Include="TimeRangeHelperTests.fs" />
+    <Compile Include="RangesTests.fs" />
+    <Compile Include="SkillsTests.fs" />
+    <Compile Include="FeasibilityTests.fs" />
+    <Compile Include="SchedulingPropertyTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
