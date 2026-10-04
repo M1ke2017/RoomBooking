@@ -1,3 +1,5 @@
+using CrewCall.WorkOrders;
+using CrewCall.Workforce;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +15,10 @@ public static class PersistenceServiceCollectionExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         services.AddDbContext<CrewCallDbContext>(options => ConfigureNpgsql(options, connectionString));
+
+        // Each module resolves the same scoped context through its own narrow interface.
+        services.AddScoped<IWorkOrdersDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
+        services.AddScoped<IWorkforceDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
 
         return services;
     }

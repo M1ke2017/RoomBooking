@@ -1,10 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Persistence infrastructure: EF Core + PostgreSQL (Npgsql). One physical database, module-owned schemas (ADR-0004). -->
+  <!--
+    Persistence infrastructure: EF Core + PostgreSQL (Npgsql). One physical database, module-owned schemas (ADR-0004).
+    References the modules (not the other way round): it maps their entities and implements their DbContext interfaces (ADR-0005).
+  -->
 
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Explicit so consumers get the same Relational version Persistence is built against (Design is private and does not flow). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrewCall.WorkOrders\CrewCall.WorkOrders.csproj" />
+    <ProjectReference Include="..\CrewCall.Workforce\CrewCall.Workforce.csproj" />
   </ItemGroup>
 
 </Project>

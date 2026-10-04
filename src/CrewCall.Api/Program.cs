@@ -1,4 +1,7 @@
+using CrewCall.Api.Endpoints;
 using CrewCall.Persistence;
+using CrewCall.WorkOrders;
+using CrewCall.Workforce;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +23,9 @@ builder.EnrichNpgsqlDbContext<CrewCallDbContext>(settings => settings.DisableHea
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CrewCallDbContext>("database");
 
+builder.Services.AddWorkOrdersModule();
+builder.Services.AddWorkforceModule();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -34,6 +40,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGet("/", () => "CrewCall.Api");
+
+app.MapCustomerEndpoints();
+app.MapSiteEndpoints();
+app.MapTechnicianEndpoints();
 
 app.MapDefaultEndpoints();
 

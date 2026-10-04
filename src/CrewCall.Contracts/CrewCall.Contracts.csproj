@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Module-neutral contracts (events, requests, responses) shared across module boundaries. Transport-agnostic: no RabbitMQ / gRPC / HTTP types here. -->
-
+  <!--
+    Transport-agnostic contracts that cross a boundary: the REST API's request/response models (Sprint 2),
+    later events. No RabbitMQ / gRPC / HTTP types here.
+  -->
 
 </Project>
