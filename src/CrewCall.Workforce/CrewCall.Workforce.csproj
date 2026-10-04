@@ -1,10 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Workforce module boundary: Technicians (Sprint 2); Teams, Skills, working hours, absences, availability later. -->
+  <!-- Workforce module boundary: Technicians, Skills, Teams, working hours, absences, holidays and availability. -->
 
   <ItemGroup>
     <!-- EF Core only for DbSet<T> in IWorkforceDbContext. Mapping lives in CrewCall.Persistence. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- IANA time zones and local <-> UTC conversion (including DST gaps and overlaps) for availability. -->
+    <PackageReference Include="NodaTime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets the pure availability rules be tested with in-memory entities (their constructors are module-internal). -->
+    <InternalsVisibleTo Include="CrewCall.Workforce.Tests" />
   </ItemGroup>
 
 </Project>

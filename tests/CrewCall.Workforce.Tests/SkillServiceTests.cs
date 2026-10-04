@@ -133,7 +133,7 @@ public sealed class SkillServiceTests(WorkforceDatabase database)
     private static async Task<Guid> CreateTechnicianAsync(AsyncServiceScope scope)
     {
         var outcome = await scope.ServiceProvider.GetRequiredService<TechnicianService>()
-            .CreateAsync(new CreateTechnician("Technician", $"tech-{Guid.NewGuid():N}@crewcall.test", null), Cancellation);
+            .CreateAsync(new CreateTechnician("Technician", $"tech-{Guid.NewGuid():N}@crewcall.test", null, "Europe/Warsaw", "PL"), Cancellation);
         return Assert.IsType<CreateTechnicianOutcome.Created>(outcome).Technician.Id;
     }
 

@@ -1,6 +1,9 @@
+using CrewCall.Workforce.Absences;
+using CrewCall.Workforce.Holidays;
 using CrewCall.Workforce.Skills;
 using CrewCall.Workforce.Teams;
 using CrewCall.Workforce.Technicians;
+using CrewCall.Workforce.WorkingHours;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrewCall.Workforce;
@@ -18,6 +21,12 @@ public interface IWorkforceDbContext
     DbSet<TechnicianSkill> TechnicianSkills { get; }
 
     DbSet<Team> Teams { get; }
+
+    DbSet<TechnicianWorkingHours> TechnicianWorkingHours { get; }
+
+    DbSet<TechnicianAbsence> TechnicianAbsences { get; }
+
+    DbSet<HolidayCalendarEntry> HolidayCalendar { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

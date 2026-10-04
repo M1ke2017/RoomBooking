@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using CrewCall.Workforce.TimeZones;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrewCall.Workforce.Technicians;
@@ -16,6 +17,9 @@ public sealed partial class TechnicianService(IWorkforceDbContext db)
             errors.Add("email", "Must be a valid email address.");
         }
 
+        var timeZoneId = errors.TimeZoneId("timeZoneId", command.TimeZoneId);
+        var countryCode = errors.CountryCode("countryCode", command.CountryCode, required: true);
+
         if (errors.Any)
         {
             return new CreateTechnicianOutcome.Invalid(errors.ToDictionary());
@@ -26,7 +30,8 @@ public sealed partial class TechnicianService(IWorkforceDbContext db)
             return new CreateTechnicianOutcome.EmailAlreadyExists(email!);
         }
 
-        var technician = new Technician(Guid.CreateVersion7(), displayName!, email!, command.IsActive ?? true);
+        var technician = new Technician(
+            Guid.CreateVersion7(), displayName!, email!, command.IsActive ?? true, timeZoneId!, countryCode!);
         db.Technicians.Add(technician);
 
         try

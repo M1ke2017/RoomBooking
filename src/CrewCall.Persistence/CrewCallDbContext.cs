@@ -9,9 +9,12 @@ using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Sites;
 using CrewCall.WorkOrders.Visits;
 using CrewCall.Workforce;
+using CrewCall.Workforce.Absences;
+using CrewCall.Workforce.Holidays;
 using CrewCall.Workforce.Skills;
 using CrewCall.Workforce.Teams;
 using CrewCall.Workforce.Technicians;
+using CrewCall.Workforce.WorkingHours;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrewCall.Persistence;
@@ -47,6 +50,12 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
 
     public DbSet<Team> Teams => Set<Team>();
 
+    public DbSet<TechnicianWorkingHours> TechnicianWorkingHours => Set<TechnicianWorkingHours>();
+
+    public DbSet<TechnicianAbsence> TechnicianAbsences => Set<TechnicianAbsence>();
+
+    public DbSet<HolidayCalendarEntry> HolidayCalendar => Set<HolidayCalendarEntry>();
+
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
 
     public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
@@ -67,6 +76,10 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
             Guid.CreateVersion7(), occurredAtUtc, eventType, aggregateType, aggregateId, payloadJson, correlationId: null));
     }
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // btree_gist: lets exclusion constraints combine "=" on uuid/text with "&&" on ranges (no-overlap rules).
+        modelBuilder.HasPostgresExtension("btree_gist");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CrewCallDbContext).Assembly);
+    }
 }

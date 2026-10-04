@@ -33,6 +33,11 @@
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup Label="Time zones">
+    <!-- IANA time zone database embedded in the package: the same zone rules on every host (no dependency on OS tzdata). -->
+    <PackageVersion Include="NodaTime" Version="3.3.5" />
+  </ItemGroup>
+
   <ItemGroup Label="API">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
   </ItemGroup>

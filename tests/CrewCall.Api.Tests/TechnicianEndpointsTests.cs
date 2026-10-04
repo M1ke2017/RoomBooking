@@ -17,13 +17,30 @@ public sealed class TechnicianEndpointsTests(CrewCallApiFactory factory)
         using var client = factory.CreateClient();
         var email = UniqueEmail();
 
-        using var response = await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Anna Kowalska", email, null), Cancellation);
+        using var response = await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Anna Kowalska", email, null, "Europe/Warsaw", "PL"), Cancellation);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var technician = await response.Content.ReadFromJsonAsync<TechnicianResponse>(Cancellation);
         Assert.NotNull(technician);
         Assert.Equal(email, technician.Email);
         Assert.True(technician.IsActive);
+        Assert.Equal("Europe/Warsaw", technician.TimeZoneId);
+        Assert.Equal("PL", technician.CountryCode);
+    }
+
+    [Theory]
+    [InlineData(null, "PL")]
+    [InlineData("Central European Standard Time", "PL")]
+    [InlineData("Europe/Warsaw", null)]
+    [InlineData("Europe/Warsaw", "POL")]
+    public async Task Post_technician_without_a_valid_time_zone_or_country_returns_400(string? timeZoneId, string? countryCode)
+    {
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/technicians", new CreateTechnicianRequest("Anna Kowalska", UniqueEmail(), null, timeZoneId, countryCode), Cancellation);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -31,9 +48,9 @@ public sealed class TechnicianEndpointsTests(CrewCallApiFactory factory)
     {
         using var client = factory.CreateClient();
         var email = UniqueEmail();
-        (await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("First", email, null), Cancellation)).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("First", email, null, "Europe/Warsaw", "PL"), Cancellation)).EnsureSuccessStatusCode();
 
-        using var response = await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Second", email, null), Cancellation);
+        using var response = await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Second", email, null, "Europe/Warsaw", "PL"), Cancellation);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -43,7 +60,7 @@ public sealed class TechnicianEndpointsTests(CrewCallApiFactory factory)
     {
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Anna Kowalska", "not-an-email", null), Cancellation);
+        using var response = await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Anna Kowalska", "not-an-email", null, "Europe/Warsaw", "PL"), Cancellation);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -53,7 +70,7 @@ public sealed class TechnicianEndpointsTests(CrewCallApiFactory factory)
     {
         using var client = factory.CreateClient();
         var email = UniqueEmail();
-        (await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Jan Nowak", email, false), Cancellation)).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/technicians", new CreateTechnicianRequest("Jan Nowak", email, false, "Europe/Warsaw", "PL"), Cancellation)).EnsureSuccessStatusCode();
 
         var technicians = await client.GetFromJsonAsync<TechnicianResponse[]>("/api/technicians", Cancellation);
 
