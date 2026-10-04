@@ -60,10 +60,7 @@ internal static class SiteEndpoints
     }
 
     private static ProblemHttpResult CustomerNotFound(Guid customerId) =>
-        TypedResults.Problem(
-            statusCode: StatusCodes.Status404NotFound,
-            title: "Customer not found",
-            detail: $"Customer '{customerId}' does not exist.");
+        ApiProblems.NotFound("Customer not found", $"Customer '{customerId}' does not exist.");
 
     internal static SiteResponse ToResponse(this Site site) =>
         new(

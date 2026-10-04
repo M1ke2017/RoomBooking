@@ -1,6 +1,6 @@
 namespace CrewCall.Workforce.Technicians;
 
-/// <summary>The basic identity of a field technician. Skills, teams and availability come in later sprints.</summary>
+/// <summary>The basic identity of a field technician, with optional membership of one team.</summary>
 public sealed class Technician
 {
     public const int DisplayNameMaxLength = 200;
@@ -22,4 +22,11 @@ public sealed class Technician
     public string Email { get; private set; }
 
     public bool IsActive { get; private set; }
+
+    /// <summary>The team the technician currently belongs to, if any (0..1).</summary>
+    public Guid? TeamId { get; private set; }
+
+    internal void JoinTeam(Guid teamId) => TeamId = teamId;
+
+    internal void LeaveTeam() => TeamId = null;
 }

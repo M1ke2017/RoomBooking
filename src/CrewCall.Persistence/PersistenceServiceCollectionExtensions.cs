@@ -1,3 +1,4 @@
+using CrewCall.Resources;
 using CrewCall.WorkOrders;
 using CrewCall.Workforce;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ public static class PersistenceServiceCollectionExtensions
         // Each module resolves the same scoped context through its own narrow interface.
         services.AddScoped<IWorkOrdersDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
         services.AddScoped<IWorkforceDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
+        services.AddScoped<IResourcesDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
 
         return services;
     }

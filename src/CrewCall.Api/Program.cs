@@ -1,5 +1,6 @@
 using CrewCall.Api.Endpoints;
 using CrewCall.Persistence;
+using CrewCall.Resources;
 using CrewCall.WorkOrders;
 using CrewCall.Workforce;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,7 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddWorkOrdersModule();
 builder.Services.AddWorkforceModule();
+builder.Services.AddResourcesModule();
 
 var app = builder.Build();
 
@@ -44,6 +46,10 @@ app.MapGet("/", () => "CrewCall.Api");
 app.MapCustomerEndpoints();
 app.MapSiteEndpoints();
 app.MapTechnicianEndpoints();
+app.MapSkillEndpoints();
+app.MapTeamEndpoints();
+app.MapVehicleEndpoints();
+app.MapEquipmentEndpoints();
 
 app.MapDefaultEndpoints();
 

@@ -1,3 +1,5 @@
+using CrewCall.Workforce.Skills;
+using CrewCall.Workforce.Teams;
 using CrewCall.Workforce.Technicians;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +12,12 @@ namespace CrewCall.Workforce;
 public interface IWorkforceDbContext
 {
     DbSet<Technician> Technicians { get; }
+
+    DbSet<Skill> Skills { get; }
+
+    DbSet<TechnicianSkill> TechnicianSkills { get; }
+
+    DbSet<Team> Teams { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

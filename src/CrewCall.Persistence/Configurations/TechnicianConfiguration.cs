@@ -1,3 +1,4 @@
+using CrewCall.Workforce.Teams;
 using CrewCall.Workforce.Technicians;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -30,5 +31,16 @@ internal sealed class TechnicianConfiguration : IEntityTypeConfiguration<Technic
         builder.Property(technician => technician.IsActive)
             .HasColumnName("is_active")
             .IsRequired();
+
+        // Technician -> 0..1 Team. Restrict: a team with members cannot be deleted by accident.
+        builder.Property(technician => technician.TeamId).HasColumnName("team_id");
+        builder.HasOne<Team>()
+            .WithMany()
+            .HasForeignKey(technician => technician.TeamId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Optimistic concurrency on PostgreSQL's xmin system column (no extra column): two concurrent team
+        // assignments for the same technician cannot both win.
+        builder.Property<uint>("RowVersion").IsRowVersion();
     }
 }
