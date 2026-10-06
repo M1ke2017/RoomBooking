@@ -10,6 +10,8 @@
     <!-- Explicit so consumers get the same Relational version Persistence is built against (Design is private and does not flow). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <!-- Read models: IANA time zones for local-time projections (the same TZDB as the Workforce module). -->
+    <PackageReference Include="NodaTime" />
   </ItemGroup>
 
   <ItemGroup>
