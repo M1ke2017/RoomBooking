@@ -172,7 +172,7 @@ public sealed class SchedulingCheckService(
         return TimeSpan.FromMinutes(value);
     }
 
-    private static IEnumerable<SchedulingConflict> FeasibilityReasons(FeasibilityResult feasibility, TechnicianSchedulingProfile profile)
+    internal static IEnumerable<SchedulingConflict> FeasibilityReasons(FeasibilityResult feasibility, TechnicianSchedulingProfile profile)
     {
         if (feasibility is not FeasibilityResult.Rejected rejected)
         {
@@ -221,7 +221,7 @@ public sealed class SchedulingCheckService(
     private static SchedulingConflict Reason(SchedulingConflictCode code, string message, Guid technicianId, IReadOnlyList<string> details) =>
         new(code, message, ResourceType.Technician, technicianId, null, null, null, details);
 
-    private static SchedulingConflict ToReason(ReservationConflict conflict)
+    internal static SchedulingConflict ToReason(ReservationConflict conflict)
     {
         var reservation = conflict.Reservation;
         var (code, message) = conflict.WithinTravelBuffer

@@ -41,6 +41,19 @@ public sealed class SchedulingDatabase : IAsyncLifetime
         await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().Database.MigrateAsync();
     }
 
+    /// <summary>
+    /// A service provider over the same database whose ports are <paramref name="technicians"/> (and the shared resources and visits),
+    /// for tests that must see only their own technicians, such as candidate discovery.
+    /// </summary>
+    public ServiceProvider CreateIsolatedProvider(FakeTechnicianSource technicians) =>
+        new ServiceCollection()
+            .AddCrewCallPersistence(_postgres.GetConnectionString())
+            .AddSchedulingModule()
+            .AddSingleton<ITechnicianSchedulingSource>(technicians)
+            .AddSingleton<IResourceCatalog>(Resources)
+            .AddSingleton<IVisitSchedulingSource>(Visits)
+            .BuildServiceProvider();
+
     /// <summary>A new scope, like one HTTP request: services in it share one DbContext.</summary>
     public AsyncServiceScope CreateScope() =>
         (_services ?? throw new InvalidOperationException("Database not initialized.")).CreateAsyncScope();

@@ -1,5 +1,6 @@
 using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Checks;
+using CrewCall.Scheduling.Matching;
 using CrewCall.Scheduling.Reservations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -18,6 +19,7 @@ public static class SchedulingModule
         services.AddScoped<ResourceReservationService>();
         services.AddScoped<SchedulingCheckService>();
         services.AddScoped<AssignmentService>();
+        services.AddScoped<ResourceMatchingService>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

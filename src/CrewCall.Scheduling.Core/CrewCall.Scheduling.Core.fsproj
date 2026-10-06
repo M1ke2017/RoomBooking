@@ -19,6 +19,7 @@
     <Compile Include="Candidate.fs" />
     <Compile Include="Feasibility.fs" />
     <Compile Include="ResourceConflicts.fs" />
+    <Compile Include="Matching.fs" />
   </ItemGroup>
 
 </Project>
