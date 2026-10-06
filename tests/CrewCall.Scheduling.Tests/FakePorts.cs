@@ -7,7 +7,44 @@ namespace CrewCall.Scheduling.Tests;
 public sealed class FakeTechnicianSource : ITechnicianSchedulingSource
 {
     private readonly ConcurrentDictionary<Guid, TechnicianSchedulingProfile> _profiles = new();
+    private readonly ConcurrentDictionary<Guid, TechnicianSummary> _summaries = new();
+    private readonly ConcurrentDictionary<Guid, byte> _teams = new();
     private readonly ConcurrentDictionary<Guid, Gate> _gates = new();
+
+    /// <summary>Registers a named technician, optionally in a team; otherwise like <see cref="Add"/>.</summary>
+    public Guid AddTechnician(
+        string name,
+        Guid? teamId = null,
+        bool isActive = true,
+        TechnicianAvailabilityState availability = TechnicianAvailabilityState.Available,
+        params string[] skillCodes)
+    {
+        var id = Add(isActive, availability, null, skillCodes);
+        _summaries[id] = new TechnicianSummary(id, name, isActive, teamId);
+        return id;
+    }
+
+    public Guid AddTeam()
+    {
+        var id = Guid.NewGuid();
+        _teams[id] = 0;
+        return id;
+    }
+
+    public Task<IReadOnlyList<TechnicianSummary>> ListTechniciansAsync(
+        IReadOnlyCollection<Guid>? technicianIds, int limit, CancellationToken cancellationToken)
+    {
+        IEnumerable<TechnicianSummary> all = _profiles.Keys.Select(Summary);
+        var selected = technicianIds is null
+            ? all.Where(summary => summary.IsActive)
+            : all.Where(summary => technicianIds.Contains(summary.TechnicianId));
+        return Task.FromResult<IReadOnlyList<TechnicianSummary>>(selected.OrderBy(summary => summary.TechnicianId).Take(limit).ToList());
+    }
+
+    public Task<bool> TeamExistsAsync(Guid teamId, CancellationToken cancellationToken) => Task.FromResult(_teams.ContainsKey(teamId));
+
+    private TechnicianSummary Summary(Guid id) =>
+        _summaries.TryGetValue(id, out var summary) ? summary : new TechnicianSummary(id, "Technician", _profiles[id].IsActive, null);
 
     /// <summary>
     /// Holds the first <paramref name="callers"/> profile lookups for the technician until all of them have arrived, so

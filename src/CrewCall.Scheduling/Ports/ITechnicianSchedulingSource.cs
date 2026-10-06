@@ -13,7 +13,19 @@ public interface ITechnicianSchedulingSource
         Guid technicianId, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken);
 
     Task<bool> ExistsAsync(Guid technicianId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// With <paramref name="technicianIds"/>: those technicians (any status) that exist. Without: active technicians,
+    /// ordered by id. At most <paramref name="limit"/> either way.
+    /// </summary>
+    Task<IReadOnlyList<TechnicianSummary>> ListTechniciansAsync(
+        IReadOnlyCollection<Guid>? technicianIds, int limit, CancellationToken cancellationToken);
+
+    Task<bool> TeamExistsAsync(Guid teamId, CancellationToken cancellationToken);
 }
+
+/// <param name="TeamId">The technician's current team, if any.</param>
+public sealed record TechnicianSummary(Guid TechnicianId, string DisplayName, bool IsActive, Guid? TeamId);
 
 /// <summary>Workforce's answer for one technician and one interval.</summary>
 /// <param name="SkillCodes">Codes of the technician's active skills (skills without a code cannot be required).</param>

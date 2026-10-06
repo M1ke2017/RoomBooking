@@ -60,4 +60,28 @@ internal sealed class WorkforceTechnicianSchedulingSource(IWorkforceDbContext wo
 
     public Task<bool> ExistsAsync(Guid technicianId, CancellationToken cancellationToken) =>
         workforce.Technicians.AnyAsync(technician => technician.Id == technicianId, cancellationToken);
+
+    public async Task<IReadOnlyList<TechnicianSummary>> ListTechniciansAsync(
+        IReadOnlyCollection<Guid>? technicianIds, int limit, CancellationToken cancellationToken)
+    {
+        var query = workforce.Technicians.AsNoTracking();
+        if (technicianIds is not null)
+        {
+            var ids = technicianIds.ToList();
+            query = query.Where(technician => ids.Contains(technician.Id));
+        }
+        else
+        {
+            query = query.Where(technician => technician.IsActive);
+        }
+
+        return await query
+            .OrderBy(technician => technician.Id)
+            .Take(limit)
+            .Select(technician => new TechnicianSummary(technician.Id, technician.DisplayName, technician.IsActive, technician.TeamId))
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<bool> TeamExistsAsync(Guid teamId, CancellationToken cancellationToken) =>
+        workforce.Teams.AnyAsync(team => team.Id == teamId, cancellationToken);
 }

@@ -17,6 +17,7 @@
     <Compile Include="FeasibilityTests.fs" />
     <Compile Include="SchedulingPropertyTests.fs" />
     <Compile Include="ResourceConflictsTests.fs" />
+    <Compile Include="MatchingTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
