@@ -1,5 +1,6 @@
 using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Checks;
+using CrewCall.Scheduling.Incidents;
 using CrewCall.Scheduling.Matching;
 using CrewCall.Scheduling.Reservations;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +13,7 @@ public static class SchedulingModule
     /// <summary>
     /// Registers the Scheduling module services. Requires registrations of <see cref="ISchedulingDbContext"/> and of the
     /// ports <see cref="Ports.ITechnicianSchedulingSource"/>, <see cref="Ports.IResourceCatalog"/> and
-    /// <see cref="Ports.IVisitSchedulingSource"/>.
+    /// <see cref="Ports.IVisitSchedulingSource"/> (and <see cref="Ports.IIncidentWorkOrders"/> for the incident workflow).
     /// </summary>
     public static IServiceCollection AddSchedulingModule(this IServiceCollection services)
     {
@@ -20,6 +21,7 @@ public static class SchedulingModule
         services.AddScoped<SchedulingCheckService>();
         services.AddScoped<AssignmentService>();
         services.AddScoped<ResourceMatchingService>();
+        services.AddScoped<UrgentIncidentService>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

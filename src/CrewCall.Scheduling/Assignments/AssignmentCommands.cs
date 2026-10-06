@@ -24,6 +24,15 @@ public sealed record ReassignVisit(
     int? TravelBufferBeforeMinutes,
     int? TravelBufferAfterMinutes);
 
+/// <summary>The resources to claim for a visit, as every claim path (create, reassign, incident dispatch) receives them.</summary>
+internal sealed record ClaimRequest(
+    Guid? TechnicianId,
+    Guid? VehicleId,
+    IReadOnlyCollection<Guid>? EquipmentIds,
+    IReadOnlyCollection<string>? RequiredSkillCodes,
+    int? TravelBufferBeforeMinutes,
+    int? TravelBufferAfterMinutes);
+
 /// <summary>The outcome of creating or replacing an assignment.</summary>
 public abstract record AssignOutcome
 {

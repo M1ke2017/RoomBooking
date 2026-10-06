@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- WorkOrders module boundary: Customers and Sites (Sprint 2); WorkOrders and Incidents later. -->
+  <!-- WorkOrders module boundary: Customers and Sites (Sprint 2), WorkOrders and Visits (Sprint 4), Incidents (Sprint 10). -->
 
   <ItemGroup>
     <!-- EF Core only for DbSet<T> in IWorkOrdersDbContext. Mapping lives in CrewCall.Persistence. -->

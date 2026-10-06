@@ -49,8 +49,22 @@ public sealed class WorkOrderService(IWorkOrdersDbContext db, TimeProvider clock
             return new CreateWorkOrderOutcome.Invalid(errors.ToDictionary());
         }
 
-        var now = StoredTime.UtcNow(clock);
-        var workOrder = new WorkOrder(Guid.CreateVersion7(), command.CustomerId, command.SiteId, title!, description, priority!.Value, now);
+        var workOrder = Add(db, command.CustomerId, command.SiteId, title!, description, priority!.Value, StoredTime.UtcNow(clock));
+
+        // One SaveChanges: the work order and its event are written in a single transaction.
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new CreateWorkOrderOutcome.Created(workOrder);
+    }
+
+    /// <summary>
+    /// Adds a validated work order and its WorkOrderCreated event to the unit of work; nothing is written until SaveChanges.
+    /// The one creation path, also used when an incident is dispatched.
+    /// </summary>
+    internal static WorkOrder Add(
+        IWorkOrdersDbContext db, Guid customerId, Guid siteId, string title, string? description, WorkOrderPriority priority, DateTimeOffset now)
+    {
+        var workOrder = new WorkOrder(Guid.CreateVersion7(), customerId, siteId, title, description, priority, now);
 
         db.WorkOrders.Add(workOrder);
         db.AppendOperationalEvent(
@@ -60,10 +74,7 @@ public sealed class WorkOrderService(IWorkOrdersDbContext db, TimeProvider clock
             now,
             new WorkOrderCreatedPayload(workOrder.Id, workOrder.CustomerId, workOrder.SiteId, workOrder.Priority));
 
-        // One SaveChanges: the work order and its event are written in a single transaction.
-        await db.SaveChangesAsync(cancellationToken);
-
-        return new CreateWorkOrderOutcome.Created(workOrder);
+        return workOrder;
     }
 
     public async Task<IReadOnlyList<WorkOrder>> ListAsync(CancellationToken cancellationToken) =>

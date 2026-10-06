@@ -57,8 +57,22 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
             return new CreateVisitOutcome.WorkOrderClosed(command.WorkOrderId, workOrderStatus.Value);
         }
 
-        var now = StoredTime.UtcNow(clock);
-        var visit = new Visit(Guid.CreateVersion7(), command.WorkOrderId, start!.Value, end!.Value, notes, now);
+        var visit = Add(db, Guid.CreateVersion7(), command.WorkOrderId, start!.Value, end!.Value, notes, StoredTime.UtcNow(clock));
+
+        // One SaveChanges: the visit and its event are written in a single transaction.
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new CreateVisitOutcome.Created(visit);
+    }
+
+    /// <summary>
+    /// Adds a validated, Planned visit and its VisitCreated event to the unit of work; nothing is written until SaveChanges.
+    /// The one creation path, also used when an incident is dispatched.
+    /// </summary>
+    internal static Visit Add(
+        IWorkOrdersDbContext db, Guid visitId, Guid workOrderId, DateTimeOffset start, DateTimeOffset end, string? notes, DateTimeOffset now)
+    {
+        var visit = new Visit(visitId, workOrderId, start, end, notes, now);
 
         db.Visits.Add(visit);
         db.AppendOperationalEvent(
@@ -68,10 +82,7 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
             now,
             new VisitCreatedPayload(visit.Id, visit.WorkOrderId, visit.Start, visit.End));
 
-        // One SaveChanges: the visit and its event are written in a single transaction.
-        await db.SaveChangesAsync(cancellationToken);
-
-        return new CreateVisitOutcome.Created(visit);
+        return visit;
     }
 
     /// <summary>Returns the work order's visits ordered by start, or null when the work order does not exist.</summary>

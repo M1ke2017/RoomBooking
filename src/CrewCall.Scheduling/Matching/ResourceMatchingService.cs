@@ -25,9 +25,68 @@ public sealed class ResourceMatchingService(
 
     public async Task<ResourceMatchingOutcome> MatchAsync(ResourceMatching command, CancellationToken cancellationToken)
     {
+        var (failed, evaluation) = await EvaluateAsync(command, cancellationToken);
+        if (failed is not null)
+        {
+            return failed;
+        }
+
+        var ranked = Core.Matching.rank(ScoringPolicyModule.defaults, evaluation!.Candidates);
+        var byId = evaluation.Candidates.ToDictionary(c => c.CandidateId);
+
+        var eligible = new List<EligibleCandidate>();
+        var rejected = new List<RejectedCandidate>();
+        foreach (var rankedCandidate in ranked)
+        {
+            var summary = evaluation.Summaries[rankedCandidate.CandidateId];
+            if (rankedCandidate.Result is MatchResult.Eligible { Item: var score })
+            {
+                var input = byId[rankedCandidate.CandidateId];
+                eligible.Add(new EligibleCandidate(
+                    eligible.Count + 1,
+                    summary.TechnicianId,
+                    summary.DisplayName,
+                    summary.TeamId,
+                    score.TotalScore,
+                    new MatchScoreComponents(
+                        score.Components.SkillScore, score.Components.AvailabilityScore,
+                        score.Components.WorkloadScore, score.Components.TeamPreferenceScore),
+                    new MatchWorkload(input.Workload.AssignedMinutesInWindow, input.Workload.AssignmentCountInWindow),
+                    new MatchSkillCoverage(input.SkillCoverage.RequiredCount, input.SkillCoverage.MatchedCount, input.SkillCoverage.AdditionalCount),
+                    input.PreferredTeamMatch.IsNoPreference ? null : input.PreferredTeamMatch.IsInPreferredTeam));
+            }
+            else if (rankedCandidate.Result is MatchResult.Rejected { Item: var reasons })
+            {
+                rejected.Add(new RejectedCandidate(
+                    summary.TechnicianId, summary.DisplayName, summary.TeamId, evaluation.ReasonsFor(summary.TechnicianId, reasons)));
+            }
+        }
+
+        var maxResults = command.MaxResults ?? DefaultMaxResults;
+        return new ResourceMatchingOutcome.Matched(new ResourceMatchingResult(
+            evaluation.Start,
+            evaluation.End,
+            evaluation.WorkloadWindowStart,
+            evaluation.WorkloadWindowEnd,
+            evaluation.Candidates.Count,
+            evaluation.CandidatesTruncated,
+            eligible.Count,
+            rejected.Count,
+            eligible.Take(maxResults).ToList(),
+            rejected.Take(MaxRejectedReturned).ToList()));
+    }
+
+    /// <summary>
+    /// Gathers the facts for every candidate (the F# matching inputs) without deciding anything; the decision is the
+    /// caller's: the ranking here, or the dispatch suggestions of an incident analysis (ADR-0012) from the same inputs.
+    /// Returns the failure (Invalid, NotFound) or the evaluation.
+    /// </summary>
+    internal async Task<(ResourceMatchingOutcome? Failed, MatchingEvaluation? Evaluation)> EvaluateAsync(
+        ResourceMatching command, CancellationToken cancellationToken)
+    {
         if (Validate(command) is { } invalid)
         {
-            return invalid;
+            return (invalid, null);
         }
 
         var start = StoredTime.Normalize(command.Start!.Value);
@@ -72,7 +131,7 @@ public sealed class ResourceMatchingService(
 
         if (missing.Count > 0)
         {
-            return new ResourceMatchingOutcome.NotFound(missing);
+            return (new ResourceMatchingOutcome.NotFound(missing), null);
         }
 
         // Conflicts: one query for every candidate plus the requested vehicle and equipment.
@@ -120,52 +179,11 @@ public sealed class ResourceMatchingService(
                     : PreferredTeamMatch.NotInPreferredTeam));
         }
 
-        var ranked = Core.Matching.rank(ScoringPolicyModule.defaults, matchingCandidates);
-        var byId = matchingCandidates.ToDictionary(c => c.CandidateId);
-
-        var eligible = new List<EligibleCandidate>();
-        var rejected = new List<RejectedCandidate>();
-        foreach (var rankedCandidate in ranked)
-        {
-            var summary = summaries[rankedCandidate.CandidateId];
-            if (rankedCandidate.Result is MatchResult.Eligible { Item: var score })
-            {
-                var input = byId[rankedCandidate.CandidateId];
-                eligible.Add(new EligibleCandidate(
-                    eligible.Count + 1,
-                    summary.TechnicianId,
-                    summary.DisplayName,
-                    summary.TeamId,
-                    score.TotalScore,
-                    new MatchScoreComponents(
-                        score.Components.SkillScore, score.Components.AvailabilityScore,
-                        score.Components.WorkloadScore, score.Components.TeamPreferenceScore),
-                    new MatchWorkload(input.Workload.AssignedMinutesInWindow, input.Workload.AssignmentCountInWindow),
-                    new MatchSkillCoverage(input.SkillCoverage.RequiredCount, input.SkillCoverage.MatchedCount, input.SkillCoverage.AdditionalCount),
-                    input.PreferredTeamMatch.IsNoPreference ? null : input.PreferredTeamMatch.IsInPreferredTeam));
-            }
-            else if (rankedCandidate.Result is MatchResult.Rejected { Item: var reasons })
-            {
-                rejected.Add(new RejectedCandidate(
-                    summary.TechnicianId, summary.DisplayName, summary.TeamId, ToReasons(reasons, summary, conflictsByReservation)));
-            }
-        }
-
-        var maxResults = command.MaxResults ?? DefaultMaxResults;
-        return new ResourceMatchingOutcome.Matched(new ResourceMatchingResult(
-            start,
-            end,
-            windowStart,
-            windowEnd,
-            candidates.Count,
-            truncated,
-            eligible.Count,
-            rejected.Count,
-            eligible.Take(maxResults).ToList(),
-            rejected.Take(MaxRejectedReturned).ToList()));
+        return (null, new MatchingEvaluation(
+            start, end, windowStart, windowEnd, truncated, summaries, matchingCandidates, conflictsByReservation));
     }
 
-    private static ResourceMatchingOutcome.Invalid? Validate(ResourceMatching command)
+    internal static ResourceMatchingOutcome.Invalid? Validate(ResourceMatching command)
     {
         var errors = new ValidationErrors();
 
@@ -305,7 +323,7 @@ public sealed class ResourceMatchingService(
                     group.Select(row => row.AssignmentId).Distinct().Count()));
     }
 
-    private static List<SchedulingConflict> ToReasons(
+    internal static List<SchedulingConflict> ToReasons(
         FSharpList<MatchRejectionReason> reasons,
         TechnicianSummary technician,
         Dictionary<Guid, ReservationConflict> conflictsByReservation)
@@ -334,4 +352,20 @@ public sealed class ResourceMatchingService(
 
         return result;
     }
+}
+
+/// <summary>The F# matching inputs of every candidate, with what is needed to explain a rejection.</summary>
+internal sealed record MatchingEvaluation(
+    DateTimeOffset Start,
+    DateTimeOffset End,
+    DateTimeOffset WorkloadWindowStart,
+    DateTimeOffset WorkloadWindowEnd,
+    bool CandidatesTruncated,
+    IReadOnlyDictionary<Guid, TechnicianSummary> Summaries,
+    IReadOnlyList<MatchingCandidate> Candidates,
+    Dictionary<Guid, ReservationConflict> ConflictsByReservation)
+{
+    /// <summary>The F# rejection reasons as scheduling-check reasons (the same codes, messages and reservation data).</summary>
+    public List<SchedulingConflict> ReasonsFor(Guid technicianId, FSharpList<MatchRejectionReason> reasons) =>
+        ResourceMatchingService.ToReasons(reasons, Summaries[technicianId], ConflictsByReservation);
 }

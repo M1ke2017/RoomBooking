@@ -9,6 +9,7 @@ using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Reservations;
 using CrewCall.WorkOrders;
 using CrewCall.WorkOrders.Customers;
+using CrewCall.WorkOrders.Incidents;
 using CrewCall.WorkOrders.Sites;
 using CrewCall.WorkOrders.Visits;
 using CrewCall.Workforce;
@@ -42,6 +43,10 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
 
     public DbSet<Visit> Visits => Set<Visit>();
+
+    public DbSet<Incident> Incidents => Set<Incident>();
+
+    public DbSet<IncidentRequiredSkill> IncidentRequiredSkills => Set<IncidentRequiredSkill>();
 
     public DbSet<OperationalEvent> OperationalEvents => Set<OperationalEvent>();
 

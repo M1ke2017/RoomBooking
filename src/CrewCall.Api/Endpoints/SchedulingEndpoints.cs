@@ -118,7 +118,8 @@ internal static class SchedulingEndpoints
             reason.ReservationId,
             reason.ReservedStart,
             reason.ReservedEnd,
-            reason.Details.ToArray());
+            reason.Details.ToArray(),
+            reason.ReservationVisitId);
 
     private static SchedulingCheckResponse ToResponse(this SchedulingCheckResult result) =>
         new(

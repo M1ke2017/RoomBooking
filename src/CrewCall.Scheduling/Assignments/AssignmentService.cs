@@ -27,7 +27,7 @@ public sealed class AssignmentService(
 
     public async Task<AssignOutcome> CreateAsync(CreateAssignment command, CancellationToken cancellationToken)
     {
-        var request = new ResourceRequest(
+        var request = new ClaimRequest(
             command.TechnicianId, command.VehicleId, command.EquipmentIds, command.RequiredSkillCodes,
             command.TravelBufferBeforeMinutes, command.TravelBufferAfterMinutes);
 
@@ -61,8 +61,7 @@ public sealed class AssignmentService(
                 return ToOutcome(check);
             }
 
-            var assignment = NewAssignment(visit, request, feasible.Result);
-            Claim(assignment);
+            var assignment = StageClaim(visit, request, feasible.Result);
 
             try
             {
@@ -98,7 +97,7 @@ public sealed class AssignmentService(
     /// </summary>
     public async Task<AssignOutcome> ReassignAsync(ReassignVisit command, CancellationToken cancellationToken)
     {
-        var request = new ResourceRequest(
+        var request = new ClaimRequest(
             command.TechnicianId, command.VehicleId, command.EquipmentIds, command.RequiredSkillCodes,
             command.TravelBufferBeforeMinutes, command.TravelBufferAfterMinutes);
 
@@ -135,7 +134,7 @@ public sealed class AssignmentService(
                 return ToOutcome(check);
             }
 
-            var replacement = NewAssignment(visit, request, feasible.Result);
+            var replacement = NewAssignment(visit, request, feasible.Result, Guid.CreateVersion7());
 
             try
             {
@@ -268,35 +267,36 @@ public sealed class AssignmentService(
             .ToListAsync(cancellationToken);
     }
 
-    private sealed record ResourceRequest(
-        Guid? TechnicianId,
-        Guid? VehicleId,
-        IReadOnlyCollection<Guid>? EquipmentIds,
-        IReadOnlyCollection<string>? RequiredSkillCodes,
-        int? TravelBufferBeforeMinutes,
-        int? TravelBufferAfterMinutes);
+    // The claim building blocks below are internal so that a workflow creating the visit in the same transaction (an
+    // incident dispatch, ADR-0012) claims resources exactly as an assignment does, without a copy of this logic.
 
     /// <summary>
     /// What only an assignment rejects up front; everything else (ids, buffers) is validated by the scheduling check.
     /// Unlike the advisory check, an assignment does not silently merge duplicate equipment ids.
     /// </summary>
-    private static AssignOutcome.Invalid? Validate(Guid visitId, ResourceRequest request)
+    private static AssignOutcome.Invalid? Validate(Guid visitId, ClaimRequest request)
     {
-        var errors = new ValidationErrors();
+        var errors = ValidateClaim(request);
         if (visitId == Guid.Empty)
         {
             errors.Add("visitId", "Required.");
         }
 
+        return errors.Any ? new AssignOutcome.Invalid(errors.ToDictionary()) : null;
+    }
+
+    internal static ValidationErrors ValidateClaim(ClaimRequest request)
+    {
+        var errors = new ValidationErrors();
         if (request.EquipmentIds is { } equipmentIds && equipmentIds.Distinct().Count() != equipmentIds.Count)
         {
             errors.Add("equipmentIds", "Must not contain duplicates.");
         }
 
-        return errors.Any ? new AssignOutcome.Invalid(errors.ToDictionary()) : null;
+        return errors;
     }
 
-    private Task<SchedulingCheckOutcome> FinalCheckAsync(VisitSchedulingInfo visit, ResourceRequest request, CancellationToken token) =>
+    internal Task<SchedulingCheckOutcome> FinalCheckAsync(VisitSchedulingInfo visit, ClaimRequest request, CancellationToken token) =>
         // VisitId: this visit's own (active) reservations are ignored; other visits' reservations are not.
         checks.CheckAsync(
             new SchedulingCheck(
@@ -311,7 +311,7 @@ public sealed class AssignmentService(
                 request.TravelBufferAfterMinutes),
             token);
 
-    private static AssignOutcome ToOutcome(SchedulingCheckOutcome check) => check switch
+    internal static AssignOutcome ToOutcome(SchedulingCheckOutcome check) => check switch
     {
         SchedulingCheckOutcome.Invalid invalid => new AssignOutcome.Invalid(invalid.Errors),
         SchedulingCheckOutcome.ResourcesNotFound notFound => new AssignOutcome.ResourcesNotFound(notFound.Missing),
@@ -320,14 +320,32 @@ public sealed class AssignmentService(
     };
 
     /// <summary>After a failed claim: the check again, now seeing whatever won the race.</summary>
-    private async Task<AssignOutcome.Rejected?> ExplainRejectionAsync(VisitSchedulingInfo visit, ResourceRequest request, CancellationToken token) =>
+    internal async Task<AssignOutcome.Rejected?> ExplainRejectionAsync(VisitSchedulingInfo visit, ClaimRequest request, CancellationToken token) =>
         await FinalCheckAsync(visit, request, token) is SchedulingCheckOutcome.Checked { Result.IsFeasible: false } recheck
             ? new AssignOutcome.Rejected(recheck.Result.Reasons)
             : null;
 
-    private Assignment NewAssignment(VisitSchedulingInfo visit, ResourceRequest request, SchedulingCheckResult checkedResult) =>
+    /// <summary>
+    /// Builds the assignment from a feasible final check and adds it with its claim to the unit of work (see
+    /// <see cref="Claim"/>). Nothing is written until the caller's SaveChanges, inside the caller's transaction.
+    /// </summary>
+    /// <param name="assignmentId">A preassigned id (a workflow may need to reference the assignment in its own events).</param>
+    internal Assignment StageClaim(
+        VisitSchedulingInfo visit, ClaimRequest request, SchedulingCheckResult feasible, Guid? assignmentId = null)
+    {
+        if (!feasible.IsFeasible)
+        {
+            throw new InvalidOperationException("Only a feasible final check can be claimed.");
+        }
+
+        var assignment = NewAssignment(visit, request, feasible, assignmentId ?? Guid.CreateVersion7());
+        Claim(assignment);
+        return assignment;
+    }
+
+    private Assignment NewAssignment(VisitSchedulingInfo visit, ClaimRequest request, SchedulingCheckResult checkedResult, Guid assignmentId) =>
         new(
-            Guid.CreateVersion7(),
+            assignmentId,
             visit.VisitId,
             checkedResult.TechnicianId,
             checkedResult.VehicleId,
@@ -387,7 +405,7 @@ public sealed class AssignmentService(
     /// Runs <paramref name="attempt"/> (one transaction each) until it produces an outcome; null means the database rejected
     /// the write for a reason not yet visible to a re-check, and the attempt is repeated.
     /// </summary>
-    private async Task<TOutcome> WithClaimRetriesAsync<TOutcome>(
+    internal async Task<TOutcome> WithClaimRetriesAsync<TOutcome>(
         Func<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction, CancellationToken, Task<TOutcome?>> attempt,
         CancellationToken cancellationToken)
         where TOutcome : class
@@ -411,7 +429,7 @@ public sealed class AssignmentService(
     /// A write the database refused: a constraint violation, a deadlock or a serialization failure, possibly wrapped by the
     /// execution strategy (which reports transient failures as InvalidOperationException).
     /// </summary>
-    private static bool IsRejectedWrite(Exception exception) =>
+    internal static bool IsRejectedWrite(Exception exception) =>
         exception is DbUpdateException or DbException
         || exception is InvalidOperationException { InnerException: DbUpdateException or DbException };
 
@@ -431,7 +449,7 @@ public sealed class AssignmentService(
             },
             cancellationToken);
 
-    private async Task RollBackAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+    internal async Task RollBackAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
     {
         await transaction.RollbackAsync(CancellationToken.None);
         db.ChangeTracker.Clear();

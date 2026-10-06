@@ -38,6 +38,7 @@ public sealed record SchedulingCheckResponse(
 /// <param name="RelatedResourceId">The technician, vehicle or equipment asset concerned.</param>
 /// <param name="ReservationId">The clashing reservation, for reservation and travel-buffer conflicts.</param>
 /// <param name="Details">Missing skill codes, or Workforce's unavailability reasons and detail.</param>
+/// <param name="ReservationVisitId">The visit the clashing reservation belongs to, when it belongs to one.</param>
 public sealed record SchedulingConflictResponse(
     string Code,
     string Message,
@@ -46,4 +47,5 @@ public sealed record SchedulingConflictResponse(
     Guid? ReservationId,
     DateTimeOffset? ReservedStart,
     DateTimeOffset? ReservedEnd,
-    string[] Details);
+    string[] Details,
+    Guid? ReservationVisitId);

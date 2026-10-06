@@ -64,6 +64,7 @@ app.MapOperationsEndpoints();
 app.MapSchedulingEndpoints();
 app.MapAssignmentEndpoints();
 app.MapOperationalCalendarEndpoints();
+app.MapIncidentEndpoints();
 
 app.MapDefaultEndpoints();
 

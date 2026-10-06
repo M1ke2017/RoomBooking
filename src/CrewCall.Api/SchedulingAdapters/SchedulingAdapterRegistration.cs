@@ -10,6 +10,7 @@ internal static class SchedulingAdapterRegistration
         services.AddScoped<ITechnicianSchedulingSource, WorkforceTechnicianSchedulingSource>();
         services.AddScoped<IResourceCatalog, ResourcesCatalog>();
         services.AddScoped<IVisitSchedulingSource, WorkOrdersVisitSchedulingSource>();
+        services.AddScoped<IIncidentWorkOrders, WorkOrdersIncidentSource>();
         return services;
     }
 }

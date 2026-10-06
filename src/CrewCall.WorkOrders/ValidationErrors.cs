@@ -67,6 +67,11 @@ internal sealed class ValidationErrors
         return null;
     }
 
+    /// <summary>Like <see cref="EnumValue{TEnum}"/>, but a missing value is allowed and gives null.</summary>
+    public TEnum? OptionalEnumValue<TEnum>(string field, string? value)
+        where TEnum : struct, Enum =>
+        Normalize(value) is null ? null : EnumValue<TEnum>(field, value);
+
     public IReadOnlyDictionary<string, string[]> ToDictionary() =>
         _errors.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray());
 

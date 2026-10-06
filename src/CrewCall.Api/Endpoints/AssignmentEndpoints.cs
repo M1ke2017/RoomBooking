@@ -127,7 +127,7 @@ internal static class AssignmentEndpoints
     private static ProblemHttpResult VisitNotFound(Guid visitId) =>
         ApiProblems.NotFound("Visit not found", $"Visit '{visitId}' does not exist.");
 
-    private static AssignmentResponse ToResponse(this Assignment assignment) =>
+    internal static AssignmentResponse ToResponse(this Assignment assignment) =>
         new(
             assignment.Id,
             assignment.VisitId,
