@@ -86,6 +86,13 @@ internal static class OperationalCalendarEndpoints
                 item.VehicleRegistrationNumber,
                 item.TravelBufferBeforeMinutes,
                 item.TravelBufferAfterMinutes,
-                item.Equipment.Select(asset => new OperationalCalendarEquipmentResponse(asset.EquipmentId, asset.Name, asset.AssetCode)).ToArray()))
+                item.Equipment.Select(asset => new OperationalCalendarEquipmentResponse(asset.EquipmentId, asset.Name, asset.AssetCode)).ToArray(),
+                item.FieldWorkStatus.ToString(),
+                item.TravelStartedAtUtc,
+                item.WorkStartedAtUtc,
+                item.CompletedAtUtc,
+                item.ActualTravelMinutes,
+                item.ActualWorkMinutes,
+                item.PauseMinutes))
                 .ToArray());
 }

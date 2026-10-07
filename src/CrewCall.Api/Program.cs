@@ -1,5 +1,6 @@
 using CrewCall.Api.Endpoints;
 using CrewCall.Api.SchedulingAdapters;
+using CrewCall.Api.WorkOrdersAdapters;
 using CrewCall.Persistence;
 using CrewCall.Resources;
 using CrewCall.Scheduling;
@@ -31,6 +32,7 @@ builder.Services.AddWorkforceModule();
 builder.Services.AddResourcesModule();
 builder.Services.AddSchedulingModule();
 builder.Services.AddSchedulingAdapters();
+builder.Services.AddWorkOrdersAdapters();
 
 var app = builder.Build();
 
@@ -65,6 +67,7 @@ app.MapSchedulingEndpoints();
 app.MapAssignmentEndpoints();
 app.MapOperationalCalendarEndpoints();
 app.MapIncidentEndpoints();
+app.MapVisitExecutionEndpoints();
 
 app.MapDefaultEndpoints();
 
