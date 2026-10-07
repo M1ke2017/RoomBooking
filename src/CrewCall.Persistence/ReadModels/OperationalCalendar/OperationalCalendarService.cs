@@ -1,4 +1,5 @@
 using CrewCall.Scheduling.Assignments;
+using CrewCall.WorkOrders.Executions;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
@@ -14,7 +15,9 @@ namespace CrewCall.Persistence.ReadModels.OperationalCalendar;
 /// 1. at most one existence query for the perspective's technician, team, vehicle or site;
 /// 2. one query for the visits overlapping the range, joined 1:1 with work order, customer and site, and left-joined
 ///    with the active assignment (at most one per visit), its technician, that technician's team and the vehicle;
-/// 3. one query for the equipment of the returned assignments (1:N, kept separate so the main query cannot multiply rows).
+/// 3. one query for the equipment of the returned assignments (1:N, kept separate so the main query cannot multiply rows);
+/// 4. only when some returned visit has field work recorded: one query for those executions' pauses (1:N, likewise).
+/// The visit's execution (at most one per visit) is left-joined in query 2.
 /// </remarks>
 public sealed class OperationalCalendarService(CrewCallDbContext db)
 {
@@ -87,36 +90,45 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
 
         var rows = await LoadVisitsAsync(start!.Value, end!.Value, perspective, perspectiveId, cancellationToken);
         var equipment = await LoadEquipmentAsync(rows, cancellationToken);
+        var pauses = await LoadPausesAsync(rows, cancellationToken);
 
         var items = rows
-            .Select(row => new OperationalCalendarItem(
-                row.VisitId,
-                row.VisitStart,
-                row.VisitEnd,
-                Local(row.VisitStart, zone!),
-                Local(row.VisitEnd, zone!),
-                row.VisitStatus,
-                row.WorkOrderId,
-                row.WorkOrderTitle,
-                row.WorkOrderPriority,
-                row.WorkOrderStatus,
-                row.CustomerId,
-                row.CustomerName,
-                row.SiteId,
-                row.SiteName,
-                row.SiteCity,
-                row.AssignmentId,
-                row.AssignmentStatus,
-                row.TechnicianId,
-                row.TechnicianName,
-                row.TeamId,
-                row.TeamName,
-                row.VehicleId,
-                row.VehicleName,
-                row.VehicleRegistrationNumber,
-                row.TravelBufferBeforeMinutes,
-                row.TravelBufferAfterMinutes,
-                row.AssignmentId is { } assignmentId && equipment.TryGetValue(assignmentId, out var assets) ? assets : []))
+            .Select(row => (row, metrics: Metrics(row, pauses)))
+            .Select(entry => new OperationalCalendarItem(
+                entry.row.VisitId,
+                entry.row.VisitStart,
+                entry.row.VisitEnd,
+                Local(entry.row.VisitStart, zone!),
+                Local(entry.row.VisitEnd, zone!),
+                entry.row.VisitStatus,
+                entry.row.WorkOrderId,
+                entry.row.WorkOrderTitle,
+                entry.row.WorkOrderPriority,
+                entry.row.WorkOrderStatus,
+                entry.row.CustomerId,
+                entry.row.CustomerName,
+                entry.row.SiteId,
+                entry.row.SiteName,
+                entry.row.SiteCity,
+                entry.row.AssignmentId,
+                entry.row.AssignmentStatus,
+                entry.row.TechnicianId,
+                entry.row.TechnicianName,
+                entry.row.TeamId,
+                entry.row.TeamName,
+                entry.row.VehicleId,
+                entry.row.VehicleName,
+                entry.row.VehicleRegistrationNumber,
+                entry.row.TravelBufferBeforeMinutes,
+                entry.row.TravelBufferAfterMinutes,
+                entry.row.AssignmentId is { } assignmentId && equipment.TryGetValue(assignmentId, out var assets) ? assets : [],
+                entry.row.FieldWorkStatus ?? FieldWorkStatus.NotStarted,
+                entry.row.TravelStartedAtUtc,
+                entry.row.WorkStartedAtUtc,
+                entry.row.CompletedAtUtc,
+                VisitExecutionMetrics.Minutes(entry.metrics?.Travel),
+                VisitExecutionMetrics.Minutes(entry.metrics?.NetWork),
+                entry.metrics is { } metrics ? VisitExecutionMetrics.Minutes(metrics.Pause) : null))
             .ToList();
 
         return new OperationalCalendarOutcome.Listed(new OperationalCalendar(
@@ -147,7 +159,12 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
         string? VehicleName,
         string? VehicleRegistrationNumber,
         int? TravelBufferBeforeMinutes,
-        int? TravelBufferAfterMinutes);
+        int? TravelBufferAfterMinutes,
+        Guid? ExecutionId,
+        FieldWorkStatus? FieldWorkStatus,
+        DateTimeOffset? TravelStartedAtUtc,
+        DateTimeOffset? WorkStartedAtUtc,
+        DateTimeOffset? CompletedAtUtc);
 
     private Task<List<VisitRow>> LoadVisitsAsync(
         DateTimeOffset start, DateTimeOffset end, OperationalCalendarPerspective perspective, Guid? perspectiveId,
@@ -170,7 +187,9 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
             from team in currentTeams.DefaultIfEmpty()
             join assignedVehicle in db.Vehicles.AsNoTracking() on assignment!.VehicleId equals (Guid?)assignedVehicle.Id into assignedVehicles
             from vehicle in assignedVehicles.DefaultIfEmpty()
-            select new { visit, workOrder, customer, site, assignment, technician, team, vehicle };
+            join visitExecution in db.VisitExecutions.AsNoTracking() on visit.Id equals visitExecution.VisitId into visitExecutions
+            from execution in visitExecutions.DefaultIfEmpty()
+            select new { visit, workOrder, customer, site, assignment, technician, team, vehicle, execution };
 
         // Technician, Team and Vehicle need an active assignment; All and Site also return unassigned visits.
         joined = perspective switch
@@ -210,7 +229,12 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
                 row.vehicle == null ? null : row.vehicle.DisplayName,
                 row.vehicle == null ? null : row.vehicle.RegistrationNumber,
                 row.assignment == null ? null : row.assignment.TravelBufferBeforeMinutes,
-                row.assignment == null ? null : row.assignment.TravelBufferAfterMinutes))
+                row.assignment == null ? null : row.assignment.TravelBufferAfterMinutes,
+                row.execution == null ? null : row.execution.Id,
+                row.execution == null ? null : row.execution.Status,
+                row.execution == null ? null : row.execution.TravelStartedAtUtc,
+                row.execution == null ? null : row.execution.WorkStartedAtUtc,
+                row.execution == null ? null : row.execution.CompletedAtUtc))
             .ToListAsync(cancellationToken);
     }
 
@@ -239,6 +263,31 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
                     .Select(asset => new OperationalCalendarEquipmentItem(asset.Id, asset.Name, asset.AssetCode))
                     .ToList());
     }
+
+    /// <summary>The pauses of the returned visits' executions, by execution; no query when no field work was recorded.</summary>
+    private async Task<ILookup<Guid, (DateTimeOffset StartedAtUtc, DateTimeOffset? EndedAtUtc)>> LoadPausesAsync(
+        IReadOnlyCollection<VisitRow> rows, CancellationToken cancellationToken)
+    {
+        var executionIds = rows.Where(row => row.ExecutionId is not null).Select(row => row.ExecutionId!.Value).ToList();
+        if (executionIds.Count == 0)
+        {
+            return Array.Empty<(Guid, DateTimeOffset, DateTimeOffset?)>().ToLookup(pause => pause.Item1, pause => (pause.Item2, pause.Item3));
+        }
+
+        var pauses = await db.VisitExecutionPauses
+            .AsNoTracking()
+            .Where(pause => executionIds.Contains(pause.VisitExecutionId))
+            .Select(pause => new { pause.VisitExecutionId, pause.StartedAtUtc, pause.EndedAtUtc })
+            .ToListAsync(cancellationToken);
+
+        return pauses.ToLookup(pause => pause.VisitExecutionId, pause => (pause.StartedAtUtc, pause.EndedAtUtc));
+    }
+
+    /// <summary>The same derived metrics as the execution itself; null for a visit without field work.</summary>
+    private static VisitExecutionMetrics? Metrics(VisitRow row, ILookup<Guid, (DateTimeOffset StartedAtUtc, DateTimeOffset? EndedAtUtc)> pauses) =>
+        row.ExecutionId is { } executionId && row.FieldWorkStatus is { } status
+            ? VisitExecutionMetrics.Calculate(status, row.TravelStartedAtUtc, row.WorkStartedAtUtc, row.CompletedAtUtc, pauses[executionId])
+            : null;
 
     private Task<bool> PerspectiveExistsAsync(OperationalCalendarPerspective perspective, Guid id, CancellationToken cancellationToken) =>
         perspective switch

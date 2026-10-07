@@ -1,5 +1,6 @@
 using CrewCall.Scheduling.Assignments;
 using CrewCall.WorkOrders;
+using CrewCall.WorkOrders.Executions;
 using CrewCall.WorkOrders.Visits;
 
 namespace CrewCall.Persistence.ReadModels.OperationalCalendar;
@@ -41,8 +42,10 @@ public sealed record OperationalCalendar(
 /// <summary>
 /// One visit as the calendar shows it: the visit, its work order, customer and site, and the visit's current (active)
 /// assignment with its technician, the technician's current team, vehicle and equipment. Assignment fields are null for
-/// an unassigned visit.
+/// an unassigned visit. The field work fields show what actually happened (ADR-0013): FieldWorkStatus is NotStarted and
+/// the rest null when nothing was recorded; the actual minutes are derived, never stored.
 /// </summary>
+/// <param name="ActualWorkMinutes">Net work minutes (gross minus pauses), only once the work is Completed.</param>
 public sealed record OperationalCalendarItem(
     Guid VisitId,
     DateTimeOffset VisitStartUtc,
@@ -70,7 +73,14 @@ public sealed record OperationalCalendarItem(
     string? VehicleRegistrationNumber,
     int? TravelBufferBeforeMinutes,
     int? TravelBufferAfterMinutes,
-    IReadOnlyList<OperationalCalendarEquipmentItem> Equipment);
+    IReadOnlyList<OperationalCalendarEquipmentItem> Equipment,
+    FieldWorkStatus FieldWorkStatus,
+    DateTimeOffset? TravelStartedAtUtc,
+    DateTimeOffset? WorkStartedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    decimal? ActualTravelMinutes,
+    decimal? ActualWorkMinutes,
+    decimal? PauseMinutes);
 
 public sealed record OperationalCalendarEquipmentItem(Guid EquipmentId, string Name, string AssetCode);
 

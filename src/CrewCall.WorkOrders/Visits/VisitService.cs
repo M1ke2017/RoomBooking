@@ -85,6 +85,28 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
         return visit;
     }
 
+    /// <summary>
+    /// Moves the (tracked) visit to <paramref name="target"/> when the lifecycle allows it and adds the VisitStatusChanged
+    /// event to the unit of work; otherwise changes nothing and returns false. Nothing is saved. The one status-change
+    /// path, also used when field work starts or completes (ADR-0013).
+    /// </summary>
+    internal static bool TryChangeStatus(IWorkOrdersDbContext db, Visit visit, VisitStatus target, DateTimeOffset now)
+    {
+        var oldStatus = visit.Status;
+        if (!visit.TryTransitionTo(target))
+        {
+            return false;
+        }
+
+        db.AppendOperationalEvent(
+            WorkOrderEvents.VisitStatusChanged,
+            WorkOrderEvents.VisitAggregate,
+            visit.Id,
+            now,
+            new VisitStatusChangedPayload(visit.Id, oldStatus, visit.Status));
+        return true;
+    }
+
     /// <summary>Returns the work order's visits ordered by start, or null when the work order does not exist.</summary>
     public async Task<IReadOnlyList<Visit>?> ListForWorkOrderAsync(Guid workOrderId, CancellationToken cancellationToken)
     {
@@ -121,17 +143,10 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
         }
 
         var oldStatus = visit.Status;
-        if (!visit.TryTransitionTo(target!.Value))
+        if (!TryChangeStatus(db, visit, target!.Value, StoredTime.UtcNow(clock)))
         {
             return new ChangeVisitStatusOutcome.TransitionNotAllowed(oldStatus, target.Value);
         }
-
-        db.AppendOperationalEvent(
-            WorkOrderEvents.VisitStatusChanged,
-            WorkOrderEvents.VisitAggregate,
-            visit.Id,
-            StoredTime.UtcNow(clock),
-            new VisitStatusChangedPayload(visit.Id, oldStatus, visit.Status));
 
         try
         {

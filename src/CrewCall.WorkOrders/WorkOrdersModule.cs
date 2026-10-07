@@ -1,4 +1,5 @@
 using CrewCall.WorkOrders.Customers;
+using CrewCall.WorkOrders.Executions;
 using CrewCall.WorkOrders.Incidents;
 using CrewCall.WorkOrders.Sites;
 using CrewCall.WorkOrders.Visits;
@@ -9,7 +10,10 @@ namespace CrewCall.WorkOrders;
 
 public static class WorkOrdersModule
 {
-    /// <summary>Registers the WorkOrders module services. Requires an <see cref="IWorkOrdersDbContext"/> registration.</summary>
+    /// <summary>
+    /// Registers the WorkOrders module services. Requires registrations of <see cref="IWorkOrdersDbContext"/> and of the
+    /// port <see cref="IActiveAssignmentCheck"/> (for field work).
+    /// </summary>
     public static IServiceCollection AddWorkOrdersModule(this IServiceCollection services)
     {
         services.AddScoped<CustomerService>();
@@ -17,6 +21,7 @@ public static class WorkOrdersModule
         services.AddScoped<WorkOrderService>();
         services.AddScoped<VisitService>();
         services.AddScoped<IncidentService>();
+        services.AddScoped<VisitExecutionService>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }
