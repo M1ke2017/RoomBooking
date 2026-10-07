@@ -12,6 +12,7 @@
 
   <ItemGroup Label="Aspire hosting">
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.0" />
+    <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="13.6.0" />
   </ItemGroup>
 
   <ItemGroup Label="Aspire service defaults">
@@ -33,6 +34,11 @@
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup Label="Messaging">
+    <!-- Plain RabbitMQ.Client (no MassTransit): the outbox publisher and consumers are explicit (ADR-0014). -->
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
+  </ItemGroup>
+
   <ItemGroup Label="Time zones">
     <!-- IANA time zone database embedded in the package: the same zone rules on every host (no dependency on OS tzdata). -->
     <PackageVersion Include="NodaTime" Version="3.3.5" />
@@ -47,6 +53,7 @@
     <PackageVersion Include="FsCheck.Xunit.v3" Version="3.4.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.15.0" />
   </ItemGroup>
 
 </Project>

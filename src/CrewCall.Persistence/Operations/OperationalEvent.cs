@@ -42,6 +42,6 @@ public sealed class OperationalEvent
 
     public string PayloadJson { get; private set; }
 
-    /// <summary>Reserved for later request/flow correlation; not populated yet.</summary>
+    /// <summary>The request or flow that caused the change, when it carried a correlation id (ADR-0014).</summary>
     public Guid? CorrelationId { get; private set; }
 }

@@ -53,6 +53,10 @@ public sealed class IncidentDispatchRaceTests(CrewCallApiFactory factory)
         Assert.Equal(new DatabaseState(0, 0, 1, 1, 0), await StateAsync(factory, incident.CustomerId, technician));
         Assert.Equal(["IncidentCreated", "IncidentAnalyzed"], await IncidentEventTypesAsync(factory, incident.Id));
         Assert.Equal(1, await AssignmentCreatedEventsAsync(technician));
+
+        // The dispatch's outbox messages (incident.dispatched, assignment.created) were staged and rolled back with it.
+        Assert.Equal(0, await OutboxCountAsync(incident.Id));
+        Assert.Equal(1, await OutboxAssignmentsCreatedAsync(technician)); // the competitor's only
     }
 
     [Fact]
@@ -74,6 +78,7 @@ public sealed class IncidentDispatchRaceTests(CrewCallApiFactory factory)
         Assert.Equal(("ReadyForDispatch", (Guid?)null), (current.Status, current.WorkOrderId));
         Assert.Equal(new DatabaseState(0, 0, 0, 0, 0), await StateAsync(factory, incident.CustomerId, technician));
         Assert.Equal(["IncidentCreated", "IncidentAnalyzed"], await IncidentEventTypesAsync(factory, incident.Id));
+        Assert.Equal(0, await OutboxCountAsync(incident.Id));
 
         // Nothing was left behind that blocks a later dispatch.
         using var retry = await DispatchAsync(client, incident.Id, Dispatch(technician));
@@ -164,6 +169,21 @@ public sealed class IncidentDispatchRaceTests(CrewCallApiFactory factory)
         var db = scope.ServiceProvider.GetRequiredService<CrewCallDbContext>();
         return await db.OperationalEvents.CountAsync(
             e => e.EventType == "AssignmentCreated" && EF.Functions.JsonContains(e.PayloadJson, $"{{\"technicianId\":\"{technicianId}\"}}"),
+            Cancellation);
+    }
+
+    private async Task<int> OutboxCountAsync(Guid aggregateId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().OutboxMessages
+            .CountAsync(message => message.AggregateId == aggregateId, Cancellation);
+    }
+
+    private async Task<int> OutboxAssignmentsCreatedAsync(Guid technicianId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().OutboxMessages.CountAsync(
+            message => message.Type == "assignment.created" && EF.Functions.JsonContains(message.Payload, $"{{\"technicianId\":\"{technicianId}\"}}"),
             Cancellation);
     }
 

@@ -19,6 +19,8 @@
     <ProjectReference Include="..\CrewCall.Workforce\CrewCall.Workforce.csproj" />
     <ProjectReference Include="..\CrewCall.Resources\CrewCall.Resources.csproj" />
     <ProjectReference Include="..\CrewCall.Scheduling\CrewCall.Scheduling.csproj" />
+    <!-- Integration event contracts written to the outbox (ADR-0014). No broker client here. -->
+    <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

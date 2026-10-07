@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CrewCall.Contracts.Integration;
+using CrewCall.Persistence.Messaging;
 using CrewCall.Persistence.Operations;
 using CrewCall.Resources;
 using CrewCall.Resources.Equipment;
@@ -29,9 +31,18 @@ namespace CrewCall.Persistence;
 /// Each module works through its own narrow interface and sees only the sets it owns.
 /// Entity mapping lives in <c>Configurations/</c>, one <see cref="IEntityTypeConfiguration{TEntity}"/> per entity.
 /// </summary>
-public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> options)
-    : DbContext(options), IWorkOrdersDbContext, IWorkforceDbContext, IResourcesDbContext, ISchedulingDbContext
+/// <param name="integrationEvents">
+/// Which operational events are also published (ADR-0014); the explicit <see cref="IntegrationEventMapper"/> by default.
+/// </param>
+/// <param name="correlation">The current request's correlation id, written to events and outbox messages.</param>
+public sealed class CrewCallDbContext(
+    DbContextOptions<CrewCallDbContext> options,
+    IIntegrationEventMapper? integrationEvents = null,
+    ICorrelationContext? correlation = null)
+    : DbContext(options), IWorkOrdersDbContext, IWorkforceDbContext, IResourcesDbContext, ISchedulingDbContext, IOutboxWriter
 {
+    private readonly IIntegrationEventMapper _integrationEvents = integrationEvents ?? new IntegrationEventMapper();
+
     private static readonly JsonSerializerOptions _payloadJsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -54,6 +65,12 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
     public DbSet<VisitExecutionPause> VisitExecutionPauses => Set<VisitExecutionPause>();
 
     public DbSet<OperationalEvent> OperationalEvents => Set<OperationalEvent>();
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
+    public DbSet<IntegrationEventReceipt> IntegrationEventReceipts => Set<IntegrationEventReceipt>();
 
     public DbSet<Technician> Technicians => Set<Technician>();
 
@@ -81,8 +98,10 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
 
     /// <inheritdoc cref="IWorkOrdersDbContext.AppendOperationalEvent"/>
     /// <remarks>
-    /// Only adds the row to the change tracker: it is inserted by the caller's next SaveChanges, which EF Core runs in one
-    /// transaction together with the state changes. There is no separate save for events.
+    /// Only adds rows to the change tracker: they are inserted by the caller's next SaveChanges, which EF Core runs in one
+    /// transaction together with the state changes. There is no separate save for events. When the event is one that is
+    /// published (<see cref="IIntegrationEventMapper"/>), its outbox message is added to the same unit of work, so the
+    /// business change, its history and its outgoing message commit together or not at all (ADR-0014).
     /// </remarks>
     public void AppendOperationalEvent(string eventType, string aggregateType, Guid aggregateId, DateTimeOffset occurredAtUtc, object payload)
     {
@@ -90,9 +109,37 @@ public sealed class CrewCallDbContext(DbContextOptions<CrewCallDbContext> option
         ArgumentException.ThrowIfNullOrWhiteSpace(aggregateType);
         ArgumentNullException.ThrowIfNull(payload);
 
+        var correlationId = correlation?.CorrelationId;
         var payloadJson = JsonSerializer.Serialize(payload, payload.GetType(), _payloadJsonOptions);
         OperationalEvents.Add(new OperationalEvent(
-            Guid.CreateVersion7(), occurredAtUtc, eventType, aggregateType, aggregateId, payloadJson, correlationId: null));
+            Guid.CreateVersion7(), occurredAtUtc, eventType, aggregateType, aggregateId, payloadJson, correlationId));
+
+        if (_integrationEvents.Map(eventType, occurredAtUtc, payload, correlationId) is { } integrationEvent)
+        {
+            AddOutboxMessage(integrationEvent, aggregateType, aggregateId);
+        }
+    }
+
+    /// <inheritdoc cref="IOutboxWriter.Add"/>
+    void IOutboxWriter.Add(IIntegrationEvent integrationEvent, string? aggregateType, Guid? aggregateId) =>
+        AddOutboxMessage(integrationEvent, aggregateType, aggregateId);
+
+    private void AddOutboxMessage(IIntegrationEvent integrationEvent, string? aggregateType, Guid? aggregateId)
+    {
+        ArgumentNullException.ThrowIfNull(integrationEvent);
+
+        var descriptor = IntegrationEventCatalog.Describe(integrationEvent);
+        OutboxMessages.Add(new OutboxMessage(
+            integrationEvent.EventId,
+            integrationEvent.OccurredAtUtc,
+            descriptor.Type,
+            descriptor.Version,
+            descriptor.RoutingKey,
+            IntegrationEventCatalog.SerializePayload(integrationEvent),
+            integrationEvent.CorrelationId,
+            aggregateType,
+            aggregateId,
+            integrationEvent.OccurredAtUtc));
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
