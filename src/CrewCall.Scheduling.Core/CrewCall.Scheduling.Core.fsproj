@@ -20,6 +20,7 @@
     <Compile Include="Feasibility.fs" />
     <Compile Include="ResourceConflicts.fs" />
     <Compile Include="Matching.fs" />
+    <Compile Include="DispatchSuggestions.fs" />
   </ItemGroup>
 
 </Project>

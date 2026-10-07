@@ -1,4 +1,5 @@
 using CrewCall.WorkOrders.Customers;
+using CrewCall.WorkOrders.Incidents;
 using CrewCall.WorkOrders.Sites;
 using CrewCall.WorkOrders.Visits;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,10 @@ public interface IWorkOrdersDbContext
     DbSet<WorkOrder> WorkOrders { get; }
 
     DbSet<Visit> Visits { get; }
+
+    DbSet<Incident> Incidents { get; }
+
+    DbSet<IncidentRequiredSkill> IncidentRequiredSkills { get; }
 
     /// <summary>
     /// Adds an operational event to the current unit of work. It is written by the next <see cref="SaveChangesAsync"/>,

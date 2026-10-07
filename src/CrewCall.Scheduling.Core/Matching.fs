@@ -165,9 +165,24 @@ module Matching =
         | [] -> Eligible(scoreEligible policy candidate)
         | reasons -> Rejected reasons
 
-    /// Scores every candidate and orders them: eligible before rejected; eligible by TotalScore descending, then fewer
-    /// assigned minutes, then fewer assignments, then CandidateId; rejected by CandidateId. Deterministic: the result
-    /// does not depend on the input order.
+    /// The order of scored candidates: TotalScore descending, then fewer assigned minutes, then fewer assignments,
+    /// then candidate id. A total order, so sorting with it is deterministic.
+    let compareScored
+        (scoreA: CandidateScore, workloadA: CandidateWorkload, idA: Guid)
+        (scoreB: CandidateScore, workloadB: CandidateWorkload, idB: Guid)
+        : int =
+        match compare scoreB.TotalScore scoreA.TotalScore with
+        | 0 ->
+            match compare workloadA.AssignedMinutesInWindow workloadB.AssignedMinutesInWindow with
+            | 0 ->
+                match compare workloadA.AssignmentCountInWindow workloadB.AssignmentCountInWindow with
+                | 0 -> compare idA idB
+                | byCount -> byCount
+            | byMinutes -> byMinutes
+        | byScore -> byScore
+
+    /// Scores every candidate and orders them: eligible before rejected; eligible by compareScored;
+    /// rejected by CandidateId. Deterministic: the result does not depend on the input order.
     let rank (policy: ScoringPolicy) (candidates: MatchingCandidate seq) : RankedCandidate list =
         let ranked =
             candidates
@@ -184,15 +199,7 @@ module Matching =
                 | Eligible score -> Some(candidate, score)
                 | Rejected _ -> None)
             |> List.sortWith (fun (a, scoreA) (b, scoreB) ->
-                match compare scoreB.TotalScore scoreA.TotalScore with
-                | 0 ->
-                    match compare a.Workload.AssignedMinutesInWindow b.Workload.AssignedMinutesInWindow with
-                    | 0 ->
-                        match compare a.Workload.AssignmentCountInWindow b.Workload.AssignmentCountInWindow with
-                        | 0 -> compare a.CandidateId b.CandidateId
-                        | byCount -> byCount
-                    | byMinutes -> byMinutes
-                | byScore -> byScore)
+                compareScored (scoreA, a.Workload, a.CandidateId) (scoreB, b.Workload, b.CandidateId))
             |> List.map fst
 
         let rejected =

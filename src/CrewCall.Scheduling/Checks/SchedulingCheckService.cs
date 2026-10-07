@@ -238,6 +238,6 @@ public sealed class SchedulingCheckService(
             };
 
         return new SchedulingConflict(
-            code, message, reservation.ResourceType, reservation.ResourceId, reservation.Id, reservation.Start, reservation.End, []);
+            code, message, reservation.ResourceType, reservation.ResourceId, reservation.Id, reservation.Start, reservation.End, [], reservation.VisitId);
     }
 }

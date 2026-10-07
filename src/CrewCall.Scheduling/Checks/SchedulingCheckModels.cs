@@ -45,6 +45,7 @@ public enum SchedulingConflictCode
 /// <param name="ResourceType">The resource concerned, for reservation conflicts and technician reasons.</param>
 /// <param name="ReservationId">The clashing reservation, for reservation and travel-buffer conflicts.</param>
 /// <param name="Details">Missing skill codes, or Workforce's unavailability reasons and detail.</param>
+/// <param name="ReservationVisitId">The visit the clashing reservation belongs to, when it belongs to one.</param>
 public sealed record SchedulingConflict(
     SchedulingConflictCode Code,
     string Message,
@@ -53,7 +54,8 @@ public sealed record SchedulingConflict(
     Guid? ReservationId,
     DateTimeOffset? ReservedStart,
     DateTimeOffset? ReservedEnd,
-    IReadOnlyList<string> Details);
+    IReadOnlyList<string> Details,
+    Guid? ReservationVisitId = null);
 
 /// <param name="EffectiveStart">Start minus the travel buffer before: where resource conflicts are checked from.</param>
 /// <param name="EffectiveEnd">End plus the travel buffer after: where resource conflicts are checked to.</param>
