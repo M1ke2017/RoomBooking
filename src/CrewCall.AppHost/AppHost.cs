@@ -7,9 +7,22 @@ var postgres = builder.AddPostgres("crewcall-postgres")
 
 var database = postgres.AddDatabase("crewcall");
 
+// RabbitMQ: integration events from the transactional outbox (ADR-0014). Credentials are generated Aspire parameters;
+// the management UI is for development only and nothing depends on it.
+var rabbitMq = builder.AddRabbitMQ("crewcall-rabbitmq")
+    .WithManagementPlugin();
+
 var api = builder.AddProject<Projects.CrewCall_Api>("crewcall-api")
     .WithReference(database)
     .WaitFor(database)
+    .WithHttpHealthCheck("/health");
+
+// Publishes the outbox and runs the integration-audit consumer. Waits for the API, which applies the migrations.
+builder.AddProject<Projects.CrewCall_Integrations>("crewcall-integrations")
+    .WithReference(database)
+    .WithReference(rabbitMq)
+    .WaitFor(api)
+    .WaitFor(rabbitMq)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.CrewCall_Web>("crewcall-web")

@@ -25,7 +25,7 @@ CrewCall is divided into the following bounded contexts:
 | **Workforce** | Technicians, Teams, Skills, working hours, absences, workforce availability: *who* can do the work | `CrewCall.Workforce` |
 | **Resources** | Vehicles, Equipment, resource availability: *with what* the work is done | `CrewCall.Resources` |
 | **Scheduling** | Visits, Assignments, the operational calendar, conflict detection, matching, rescheduling: *when* and *by whom* | `CrewCall.Scheduling` (orchestration, C#) + `CrewCall.Scheduling.Core` (decisions, F#) |
-| **Integrations** | Synchronisation with external systems (Google Calendar, Outlook, ...). External calendars are integration targets, never the system of record | *not created yet* |
+| **Integrations** | Synchronisation with external systems (Google Calendar, Outlook, ...). External calendars are integration targets, never the system of record | `CrewCall.Integrations` since Sprint 12: outbox publisher and integration consumers (ADR-0014) |
 | **Reporting** | Read models and reports built from operational history | *not created yet* |
 
 Supporting projects:
@@ -36,7 +36,8 @@ Supporting projects:
 - `CrewCall.Persistence`: EF Core / PostgreSQL infrastructure (empty in Sprint 1).
 - `CrewCall.Web`: Blazor WebAssembly client. Talks to the API over HTTP only.
 
-Integrations and Reporting are deliberately **not** created as projects yet. They will appear when the first real
+Reporting is deliberately **not** created as a project yet (Integrations appeared in Sprint 12 with the outbox
+publisher, ADR-0014). Projects appear when the first real
 process (calendar sync, report projection) justifies them.
 
 ### Dependency rules

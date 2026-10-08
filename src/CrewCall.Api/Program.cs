@@ -1,3 +1,4 @@
+using CrewCall.Api;
 using CrewCall.Api.Endpoints;
 using CrewCall.Api.SchedulingAdapters;
 using CrewCall.Api.WorkOrdersAdapters;
@@ -37,6 +38,7 @@ builder.Services.AddWorkOrdersAdapters();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseCorrelationId();
 
 if (app.Environment.IsDevelopment())
 {
