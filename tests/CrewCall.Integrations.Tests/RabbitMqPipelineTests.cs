@@ -4,12 +4,8 @@ using CrewCall.Integrations.Consumers;
 using CrewCall.Integrations.Messaging;
 using CrewCall.Persistence;
 using CrewCall.Persistence.Messaging;
-using CrewCall.WorkOrders;
-using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Executions;
 using CrewCall.WorkOrders.Operations;
-using CrewCall.WorkOrders.Sites;
-using CrewCall.WorkOrders.Visits;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -31,25 +27,8 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     /// <summary>A visit whose field work is completed through the WorkOrders module: the business transaction under test.</summary>
-    private async Task<Guid> CompleteVisitWorkAsync(ServiceProvider services)
-    {
-        await using var scope = services.CreateAsyncScope();
-        var provider = scope.ServiceProvider;
-        var customer = Assert.IsType<CreateCustomerOutcome.Created>(
-            await provider.GetRequiredService<CustomerService>().CreateAsync(new CreateCustomer($"Customer {Guid.NewGuid():N}", null), Cancellation)).Customer;
-        var site = Assert.IsType<CreateSiteOutcome.Created>(await provider.GetRequiredService<SiteService>()
-            .CreateAsync(new CreateSite(customer.Id, "Plant 1", null, "Poznań", null, "PL", null, null), Cancellation)).Site;
-        var workOrder = Assert.IsType<CreateWorkOrderOutcome.Created>(await provider.GetRequiredService<WorkOrderService>()
-            .CreateAsync(new CreateWorkOrder(customer.Id, site.Id, "Replace inverter", null, null), Cancellation)).WorkOrder;
-        var start = new DateTimeOffset(2038, 6, 1, 9, 0, 0, TimeSpan.Zero);
-        var visit = Assert.IsType<CreateVisitOutcome.Created>(await provider.GetRequiredService<VisitService>()
-            .CreateAsync(new CreateVisit(workOrder.Id, start, start.AddHours(1), null), Cancellation)).Visit;
-
-        var execution = provider.GetRequiredService<VisitExecutionService>();
-        Assert.IsType<VisitExecutionOutcome.Changed>(await execution.StartWorkAsync(visit.Id, Cancellation));
-        Assert.IsType<VisitExecutionOutcome.Changed>(await execution.CompleteAsync(visit.Id, Cancellation));
-        return visit.Id;
-    }
+    private static async Task<Guid> CompleteVisitWorkAsync(ServiceProvider services) =>
+        (await BusinessFlow.CompleteVisitWorkAsync(services)).VisitId;
 
     private static async Task<OutboxMessage> OutboxForVisitAsync(ServiceProvider services, Guid visitId)
     {
@@ -62,7 +41,7 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<CrewCallDbContext>();
-        return (await db.InboxMessages.CountAsync(m => m.MessageId == messageId, Cancellation),
+        return (await db.InboxMessages.CountAsync(m => m.MessageId == messageId && m.ConsumerName == InboxConsumers.IntegrationAudit, Cancellation),
                 await db.IntegrationEventReceipts.CountAsync(r => r.MessageId == messageId, Cancellation));
     }
 
@@ -218,7 +197,9 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<CrewCallDbContext>();
         var receipt = await db.IntegrationEventReceipts.AsNoTracking().SingleAsync(r => r.MessageId == outbox.Id, Cancellation);
-        var inbox = await db.InboxMessages.AsNoTracking().SingleAsync(m => m.MessageId == outbox.Id, Cancellation);
+        // One inbox record per consumer (ADR-0015); this is the audit consumer's.
+        var inbox = await db.InboxMessages.AsNoTracking()
+            .SingleAsync(m => m.MessageId == outbox.Id && m.ConsumerName == InboxConsumers.IntegrationAudit, Cancellation);
         Assert.Equal(("visit.work-completed", 1), (receipt.EventType, receipt.EventVersion));
         Assert.Equal(("visit.work-completed", outbox.Id), (inbox.Type, inbox.MessageId));
         Assert.NotNull(inbox.ProcessedAtUtc);

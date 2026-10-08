@@ -1,15 +1,18 @@
 namespace CrewCall.Persistence.Messaging;
 
 /// <summary>
-/// A message a consumer has handled (ops.inbox_messages): the idempotency record. Written in the same transaction as the
-/// consumer's effect, so a redelivered message (same MessageId) finds it and the effect does not run twice.
+/// A message a consumer has handled (ops.inbox_messages): the idempotency record, keyed by consumer and MessageId
+/// (ADR-0015). Each consumer has its own record, so the same message is handled once by every consumer, and a redelivery
+/// to the same consumer finds its record and is skipped.
 /// </summary>
 public sealed class InboxMessage
 {
+    public const int ConsumerNameMaxLength = 100;
     public const int TypeMaxLength = 100;
 
-    internal InboxMessage(Guid messageId, string type, DateTimeOffset receivedAtUtc, DateTimeOffset processedAtUtc)
+    internal InboxMessage(string consumerName, Guid messageId, string type, DateTimeOffset receivedAtUtc, DateTimeOffset processedAtUtc)
     {
+        ConsumerName = consumerName;
         MessageId = messageId;
         Type = type;
         ReceivedAtUtc = receivedAtUtc;
@@ -19,8 +22,12 @@ public sealed class InboxMessage
     // For EF Core materialization.
     private InboxMessage()
     {
+        ConsumerName = string.Empty;
         Type = string.Empty;
     }
+
+    /// <summary>The consumer that handled the message, e.g. "crewcall-integration-audit".</summary>
+    public string ConsumerName { get; private set; }
 
     public Guid MessageId { get; private set; }
 

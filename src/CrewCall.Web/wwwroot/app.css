@@ -202,3 +202,40 @@ code {
         width: auto;
     }
 }
+
+/* Live operations developer page (/live). */
+.live-state {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+}
+
+.live-state-connected {
+    color: #1f7a3a;
+}
+
+.live-state-connecting,
+.live-state-reconnecting {
+    color: #9a6700;
+}
+
+.live-state-disconnected {
+    color: #b42318;
+}
+
+.live-subscribe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.live-subscriptions {
+    padding-left: 18px;
+}
+
+.error {
+    color: #b42318;
+}

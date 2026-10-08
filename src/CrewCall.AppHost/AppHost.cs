@@ -17,17 +17,21 @@ var api = builder.AddProject<Projects.CrewCall_Api>("crewcall-api")
     .WaitFor(database)
     .WithHttpHealthCheck("/health");
 
-// Publishes the outbox and runs the integration-audit consumer. Waits for the API, which applies the migrations.
-builder.AddProject<Projects.CrewCall_Integrations>("crewcall-integrations")
+// Publishes the outbox, runs the integration-audit and live-operations consumers, and hosts the live operations SignalR
+// hub (ADR-0014, ADR-0015). Waits for the API, which applies the migrations.
+var integrations = builder.AddProject<Projects.CrewCall_Integrations>("crewcall-integrations")
     .WithReference(database)
     .WithReference(rabbitMq)
     .WaitFor(api)
     .WaitFor(rabbitMq)
     .WithHttpHealthCheck("/health");
 
+// The Web finds the API and the live operations hub through service discovery. It waits only for the API: without the
+// broker or the Integrations service it still runs, it just receives no live updates.
 builder.AddProject<Projects.CrewCall_Web>("crewcall-web")
     .WithExternalHttpEndpoints()
     .WithReference(api)
+    .WithReference(integrations)
     .WaitFor(api)
     .WithHttpHealthCheck("/health");
 

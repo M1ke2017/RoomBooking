@@ -205,7 +205,7 @@ RETURNING *
 - Ordering is per publisher and batch (oldest first); global ordering across publishers or retries is not guaranteed.
   Consumers should not depend on it.
 - Processed outbox rows and inbox rows accumulate. A retention job is future work.
-- The inbox is keyed by MessageId alone because there is one consumer today. A second consumer in the same database
-  needs a per-consumer key.
+- The inbox was keyed by MessageId alone while there was one consumer. Sprint 13 (ADR-0015) keys it by consumer name
+  and MessageId, so each consumer handles a message once, independently of the others.
 - Out of scope: SignalR, a reporting projection, gRPC, Kafka, MassTransit, event sourcing, sagas and exactly-once
   delivery.

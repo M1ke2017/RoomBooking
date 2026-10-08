@@ -1,12 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!--
-    Blazor Web App (server-hosted, static server-side rendering).
-    Talks to CrewCall.Api over HTTP using Aspire service discovery. No project references to modules.
+    Blazor Web App (server-hosted). Static server-side rendering, plus one interactive developer page (/live).
+    Talks to CrewCall.Api over HTTP and listens to the live operations hub in CrewCall.Integrations over SignalR, both
+    found through Aspire service discovery. References only the transport-agnostic contracts, never modules.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\CrewCall.ServiceDefaults\CrewCall.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
   </ItemGroup>
 
 </Project>

@@ -14,6 +14,6 @@ public sealed class IntegrationAuditHandler(IServiceScopeFactory scopes, TimePro
         await using var scope = scopes.CreateAsyncScope();
         var inbox = scope.ServiceProvider.GetRequiredService<InboxStore>();
         var now = clock.GetUtcNow();
-        return await inbox.ProcessOnceAsync(envelope, now, db => InboxStore.AddReceipt(db, envelope, now), cancellationToken);
+        return await inbox.ProcessOnceAsync(InboxConsumers.IntegrationAudit, envelope, now, db => InboxStore.AddReceipt(db, envelope, now), cancellationToken);
     }
 }
