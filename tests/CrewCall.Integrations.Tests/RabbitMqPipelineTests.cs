@@ -1,4 +1,5 @@
 using System.Text;
+using CrewCall.Messaging;
 using CrewCall.Contracts.Integration;
 using CrewCall.Integrations.Consumers;
 using CrewCall.Integrations.Messaging;
@@ -30,11 +31,15 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
     private static async Task<Guid> CompleteVisitWorkAsync(ServiceProvider services) =>
         (await BusinessFlow.CompleteVisitWorkAsync(services)).VisitId;
 
-    private static async Task<OutboxMessage> OutboxForVisitAsync(ServiceProvider services, Guid visitId)
+    /// <summary>
+    /// The visit's outbox message of one type. Since Sprint 14 a completed visit has four: visit.created, two
+    /// visit.status-changed (InProgress, Completed) and visit.work-completed.
+    /// </summary>
+    private static async Task<OutboxMessage> OutboxForVisitAsync(ServiceProvider services, Guid visitId, string type = "visit.work-completed")
     {
         await using var scope = services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().OutboxMessages.AsNoTracking()
-            .SingleAsync(message => message.AggregateId == visitId, Cancellation);
+            .SingleAsync(message => message.AggregateId == visitId && message.Type == type, Cancellation);
     }
 
     private static async Task<(int Inbox, int Receipts)> ConsumedAsync(ServiceProvider services, Guid messageId)
@@ -74,7 +79,7 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
 
         var result = await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation);
 
-        Assert.Equal(new Integrations.OutboxBatchResult(1, 1, 0), result);
+        Assert.Equal(new Integrations.OutboxBatchResult(4, 4, 0), result); // the visit's four messages
         var outbox = await OutboxForVisitAsync(services, visitId);
         Assert.NotNull(outbox.ProcessedAtUtc); // only after the broker's confirmation
         await observer.ExchangeDeclarePassiveAsync("crewcall.events", Cancellation); // the topic exchange exists
@@ -152,17 +157,18 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
 
         // The business transaction does not involve the broker at all: it commits, and the message waits in the outbox.
         var visitId = await CompleteVisitWorkAsync(services);
-        var pending = await OutboxForVisitAsync(services, visitId);
+        // The visit's oldest message is the one the failing pass attempts; the rest of the batch is released.
+        var pending = await OutboxForVisitAsync(services, visitId, "visit.created");
         Assert.Null(pending.ProcessedAtUtc);
 
         await using (var unreachable = infrastructure.Broker("amqp://guest:guest@127.0.0.1:1/"))
         await using (var downPublisher = new RabbitMqMessagePublisher(unreachable, Options.Create(new OutboxPublisherOptions())))
         {
             var attempt = await MessagingInfrastructure.Processor(services, downPublisher, clock).ProcessBatchAsync(Cancellation);
-            Assert.Equal(new Integrations.OutboxBatchResult(1, 0, 1), attempt);
+            Assert.Equal(new Integrations.OutboxBatchResult(4, 0, 1), attempt);
         }
 
-        var waiting = await OutboxForVisitAsync(services, visitId);
+        var waiting = await OutboxForVisitAsync(services, visitId, "visit.created");
         Assert.Null(waiting.ProcessedAtUtc);
         Assert.Equal(1, waiting.AttemptCount);
         Assert.False(string.IsNullOrEmpty(waiting.LastError));
@@ -170,12 +176,12 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
         // The broker is reachable again: after the backoff the same message is published.
         await using var broker = infrastructure.Broker();
         await using var publisher = new RabbitMqMessagePublisher(broker, Options.Create(new OutboxPublisherOptions()));
-        var (observer, queue) = await ObserveAsync(broker, "visit.#");
+        var (observer, queue) = await ObserveAsync(broker, "visit.created");
         clock.Advance(TimeSpan.FromSeconds(3));
 
-        Assert.Equal(new Integrations.OutboxBatchResult(1, 1, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
+        Assert.Equal(new Integrations.OutboxBatchResult(4, 4, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
         Assert.Equal(pending.Id.ToString(), (await NextAsync(observer, queue)).BasicProperties.MessageId);
-        Assert.Equal(2, (await OutboxForVisitAsync(services, visitId)).AttemptCount);
+        Assert.Equal(2, (await OutboxForVisitAsync(services, visitId, "visit.created")).AttemptCount);
         await observer.DisposeAsync();
     }
 

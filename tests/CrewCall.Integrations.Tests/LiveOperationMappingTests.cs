@@ -1,7 +1,7 @@
 using System.Text.Json;
+using CrewCall.Messaging;
 using CrewCall.Contracts.Integration;
 using CrewCall.Contracts.Live;
-using CrewCall.Integrations.Consumers;
 using CrewCall.Integrations.Live;
 using Xunit;
 using static CrewCall.Integrations.Tests.LiveTestKit;

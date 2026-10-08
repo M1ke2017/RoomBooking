@@ -3,18 +3,18 @@
   <!--
     Integrations service (ADR-0001, ADR-0014, ADR-0015): a separate process with its own lifecycle. It publishes the
     transactional outbox to RabbitMQ (crewcall.events), runs the technical integration-audit consumer, and delivers live
-    operations: the live consumer and the SignalR hub (/hubs/live-operations). The only project that references
-    RabbitMQ.Client or hosts SignalR: business modules and the API never talk to the broker or to browsers.
+    operations: the live consumer and the SignalR hub (/hubs/live-operations). The broker plumbing comes from
+    CrewCall.Messaging. Business modules and the API never talk to the broker or to browsers.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\CrewCall.ServiceDefaults\CrewCall.ServiceDefaults.csproj" />
     <ProjectReference Include="..\CrewCall.Persistence\CrewCall.Persistence.csproj" />
     <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
+    <ProjectReference Include="..\CrewCall.Messaging\CrewCall.Messaging.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="RabbitMQ.Client" />
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
   </ItemGroup>

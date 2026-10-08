@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CrewCall.Contracts.Integration;
+using CrewCall.Messaging;
 using CrewCall.Persistence.Messaging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;

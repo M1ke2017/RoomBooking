@@ -1,7 +1,7 @@
 using System.Text.Json;
 using CrewCall.Contracts.Integration;
 using CrewCall.Contracts.Live;
-using CrewCall.Integrations.Consumers;
+using CrewCall.Messaging;
 
 namespace CrewCall.Integrations.Live;
 

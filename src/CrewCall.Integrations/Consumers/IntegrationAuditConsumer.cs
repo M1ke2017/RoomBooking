@@ -1,5 +1,6 @@
 using CrewCall.Contracts.Integration;
 using CrewCall.Integrations.Messaging;
+using CrewCall.Messaging;
 using CrewCall.Persistence.Messaging;
 using RabbitMQ.Client;
 

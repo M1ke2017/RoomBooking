@@ -52,3 +52,33 @@ public sealed record VisitWorkCompletedIntegrationEvent(
     decimal GrossWorkMinutes,
     decimal PauseMinutes,
     decimal NetWorkMinutes) : IIntegrationEvent;
+
+/// <summary>
+/// visit.created v1 (Sprint 14): a visit was planned for a work order, with the context read sides need (customer, site,
+/// planned window), so they never have to look it up in the operational database.
+/// </summary>
+/// <param name="WorkOrderPriority">The work order's priority when the visit was created: "Low", "Normal", "High" or "Urgent".</param>
+public sealed record VisitCreatedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredAtUtc,
+    Guid? CorrelationId,
+    Guid VisitId,
+    Guid WorkOrderId,
+    Guid CustomerId,
+    Guid SiteId,
+    DateTimeOffset PlannedStartUtc,
+    DateTimeOffset PlannedEndUtc,
+    DateTimeOffset CreatedAtUtc,
+    string WorkOrderPriority) : IIntegrationEvent;
+
+/// <summary>
+/// visit.status-changed v1 (Sprint 14): a visit moved between statuses ("Planned", "InProgress", "Completed",
+/// "Cancelled"). Statuses are strings: the contract does not depend on the domain enum.
+/// </summary>
+public sealed record VisitStatusChangedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredAtUtc,
+    Guid? CorrelationId,
+    Guid VisitId,
+    string OldStatus,
+    string NewStatus) : IIntegrationEvent;

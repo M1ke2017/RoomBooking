@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Reporting service (ADR-0016): a separate process with its own database (crewcall_reporting). It consumes integration
+    events from RabbitMQ (crewcall.reporting queue), builds event-driven read projections and serves the read-only
+    Reporting API. It never reads the operational database and never calls CrewCall.Api: it references only the
+    contracts, the shared broker plumbing and the service defaults, never CrewCall.Persistence or a business module.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrewCall.ServiceDefaults\CrewCall.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
+    <ProjectReference Include="..\CrewCall.Messaging\CrewCall.Messaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+  </ItemGroup>
+
+</Project>

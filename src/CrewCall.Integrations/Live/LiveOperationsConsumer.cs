@@ -1,6 +1,5 @@
 using CrewCall.Contracts.Integration;
-using CrewCall.Integrations.Consumers;
-using CrewCall.Integrations.Messaging;
+using CrewCall.Messaging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 
@@ -30,7 +29,7 @@ public sealed class LiveOperationsConsumer(
     protected override TimeSpan RequeueDelay => _options.RequeueDelay;
 
     protected override Task DeclareQueueAsync(IChannel channel, CancellationToken cancellationToken) =>
-        RabbitMqTopology.DeclareQueueAsync(channel, _options.QueueName, LiveOperationMapper.SupportedRoutingKeys, cancellationToken);
+        IntegrationExchange.DeclareQueueAsync(channel, _options.QueueName, LiveOperationMapper.SupportedRoutingKeys, cancellationToken);
 
     protected override async Task HandleAsync(IntegrationEventEnvelope envelope, CancellationToken cancellationToken)
     {

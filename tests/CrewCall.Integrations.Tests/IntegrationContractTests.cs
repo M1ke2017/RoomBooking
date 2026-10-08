@@ -3,12 +3,14 @@ using System.Text.Json;
 using CrewCall.Contracts.Integration;
 using CrewCall.Persistence.Messaging;
 using CrewCall.Scheduling.Assignments;
+using CrewCall.WorkOrders;
 using CrewCall.WorkOrders.Operations;
+using CrewCall.WorkOrders.Visits;
 using Xunit;
 
 namespace CrewCall.Integrations.Tests;
 
-/// <summary>The published contracts (ADR-0014): stable names, versions, explicit fields, a validated envelope.</summary>
+/// <summary>The published contracts (ADR-0014, ADR-0016): stable names, versions, explicit fields, a validated envelope.</summary>
 public sealed class IntegrationContractTests
 {
     private static readonly DateTimeOffset At = new(2038, 3, 1, 9, 30, 0, TimeSpan.Zero);
@@ -30,6 +32,12 @@ public sealed class IntegrationContractTests
         { new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), At, null, Guid.NewGuid(), Guid.NewGuid(), 30m, 120m, 15m, 105m),
           "visit.work-completed", "visit.work.completed",
           ["eventId", "occurredAtUtc", "correlationId", "visitId", "executionId", "travelMinutes", "grossWorkMinutes", "pauseMinutes", "netWorkMinutes"] },
+        { new VisitCreatedIntegrationEvent(Guid.NewGuid(), At, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), At.AddDays(1), At.AddDays(1).AddHours(1), At, "High"),
+          "visit.created", "visit.created",
+          ["eventId", "occurredAtUtc", "correlationId", "visitId", "workOrderId", "customerId", "siteId", "plannedStartUtc", "plannedEndUtc", "createdAtUtc", "workOrderPriority"] },
+        { new VisitStatusChangedIntegrationEvent(Guid.NewGuid(), At, null, Guid.NewGuid(), "Planned", "InProgress"),
+          "visit.status-changed", "visit.status.changed",
+          ["eventId", "occurredAtUtc", "correlationId", "visitId", "oldStatus", "newStatus"] },
     };
 
     [Theory]
@@ -53,7 +61,7 @@ public sealed class IntegrationContractTests
     public void The_catalog_lists_exactly_the_published_events_with_unique_types()
     {
         Assert.Equal(
-            ["assignment.cancelled", "assignment.created", "assignment.replaced", "incident.dispatched", "visit.work-completed"],
+            ["assignment.cancelled", "assignment.created", "assignment.replaced", "incident.dispatched", "visit.created", "visit.status-changed", "visit.work-completed"],
             IntegrationEventCatalog.All.Select(descriptor => descriptor.Type).Order());
         Assert.All(IntegrationEventCatalog.All, descriptor => Assert.Equal(1, descriptor.Version));
         Assert.Equal(IntegrationEventCatalog.All.Count, IntegrationEventCatalog.All.Select(d => d.RoutingKey).Distinct().Count());
@@ -124,9 +132,25 @@ public sealed class IntegrationEventMapperTests
     }
 
     [Fact]
+    public void Visit_creation_and_status_changes_are_published_with_the_context_read_sides_need()
+    {
+        var payload = new VisitCreatedPayload(Guid.NewGuid(), Guid.NewGuid(), At.AddDays(1), At.AddDays(1).AddHours(1), Guid.NewGuid(), Guid.NewGuid(), WorkOrderPriority.Urgent);
+
+        var created = Assert.IsType<VisitCreatedIntegrationEvent>(_mapper.Map(WorkOrderEvents.VisitCreated, At, payload, null));
+
+        Assert.Equal(
+            (payload.VisitId, payload.WorkOrderId, payload.CustomerId, payload.SiteId, payload.Start, payload.End, At, "Urgent"),
+            (created.VisitId, created.WorkOrderId, created.CustomerId, created.SiteId, created.PlannedStartUtc, created.PlannedEndUtc, created.CreatedAtUtc, created.WorkOrderPriority));
+
+        var changed = Assert.IsType<VisitStatusChangedIntegrationEvent>(_mapper.Map(
+            WorkOrderEvents.VisitStatusChanged, At, new VisitStatusChangedPayload(payload.VisitId, VisitStatus.InProgress, VisitStatus.Completed), null));
+        Assert.Equal((payload.VisitId, "InProgress", "Completed"), (changed.VisitId, changed.OldStatus, changed.NewStatus));
+    }
+
+    [Fact]
     public void Internal_operational_events_are_not_published()
     {
-        Assert.Null(_mapper.Map(WorkOrderEvents.VisitCreated, At, new VisitCreatedPayload(Guid.NewGuid(), Guid.NewGuid(), At, At.AddHours(1)), null));
+        Assert.Null(_mapper.Map(WorkOrderEvents.WorkOrderCreated, At, new WorkOrderCreatedPayload(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), WorkOrderPriority.Normal), null));
         Assert.Null(_mapper.Map(VisitExecutionEvents.VisitWorkStarted, At, new VisitWorkStartedPayload(Guid.NewGuid(), Guid.NewGuid(), At, null), null));
         Assert.Null(_mapper.Map(IncidentEvents.IncidentCreated, At, new object(), null));
 

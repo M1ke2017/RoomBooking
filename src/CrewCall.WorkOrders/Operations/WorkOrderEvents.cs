@@ -19,6 +19,11 @@ public sealed record WorkOrderCreatedPayload(Guid WorkOrderId, Guid CustomerId, 
 
 public sealed record WorkOrderStatusChangedPayload(Guid WorkOrderId, WorkOrderStatus OldStatus, WorkOrderStatus NewStatus);
 
-public sealed record VisitCreatedPayload(Guid VisitId, Guid WorkOrderId, DateTimeOffset Start, DateTimeOffset End);
+/// <summary>
+/// The visit and its work order's customer, site and priority (since Sprint 14), so the published visit.created event
+/// carries the context read sides need. Events recorded earlier lack the three work-order fields.
+/// </summary>
+public sealed record VisitCreatedPayload(
+    Guid VisitId, Guid WorkOrderId, DateTimeOffset Start, DateTimeOffset End, Guid CustomerId, Guid SiteId, WorkOrderPriority Priority);
 
 public sealed record VisitStatusChangedPayload(Guid VisitId, Visits.VisitStatus OldStatus, Visits.VisitStatus NewStatus);

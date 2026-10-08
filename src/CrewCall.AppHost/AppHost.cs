@@ -7,6 +7,10 @@ var postgres = builder.AddPostgres("crewcall-postgres")
 
 var database = postgres.AddDatabase("crewcall");
 
+// The reporting service's own database (ADR-0016): a second logical database on the same server, with its own
+// connection string and migrations. Nothing joins across the two.
+var reportingDatabase = postgres.AddDatabase("crewcall-reporting", "crewcall_reporting");
+
 // RabbitMQ: integration events from the transactional outbox (ADR-0014). Credentials are generated Aspire parameters;
 // the management UI is for development only and nothing depends on it.
 var rabbitMq = builder.AddRabbitMQ("crewcall-rabbitmq")
@@ -23,6 +27,15 @@ var integrations = builder.AddProject<Projects.CrewCall_Integrations>("crewcall-
     .WithReference(database)
     .WithReference(rabbitMq)
     .WaitFor(api)
+    .WaitFor(rabbitMq)
+    .WithHttpHealthCheck("/health");
+
+// Event-driven reporting projections and the read-only Reporting API (ADR-0016). It references only its own database
+// and the broker: never the operational database, never the API.
+builder.AddProject<Projects.CrewCall_Reporting>("crewcall-reporting-service")
+    .WithReference(reportingDatabase)
+    .WithReference(rabbitMq)
+    .WaitFor(reportingDatabase)
     .WaitFor(rabbitMq)
     .WithHttpHealthCheck("/health");
 

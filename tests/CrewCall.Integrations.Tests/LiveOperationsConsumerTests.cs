@@ -1,3 +1,4 @@
+using CrewCall.Messaging;
 using CrewCall.Contracts.Integration;
 using CrewCall.Contracts.Live;
 using CrewCall.Integrations.Consumers;
@@ -61,11 +62,15 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
             () => Task.FromResult(logs.Messages.Any(m => parts.All(part => m.Contains(part, StringComparison.Ordinal)))),
             $"a log with {string.Join(", ", parts)}");
 
-    private static async Task<OutboxMessage> OutboxForVisitAsync(ServiceProvider services, Guid visitId)
+    /// <summary>
+    /// The visit's outbox message of one type. Since Sprint 14 a completed visit has four: visit.created, two
+    /// visit.status-changed (InProgress, Completed) and visit.work-completed.
+    /// </summary>
+    private static async Task<OutboxMessage> OutboxForVisitAsync(ServiceProvider services, Guid visitId, string type = "visit.work-completed")
     {
         await using var scope = services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().OutboxMessages.AsNoTracking()
-            .SingleAsync(message => message.AggregateId == visitId, Cancellation);
+            .SingleAsync(message => message.AggregateId == visitId && message.Type == type, Cancellation);
     }
 
     private static async Task<IReadOnlyList<string>> InboxConsumersAsync(ServiceProvider services, Guid messageId)
@@ -228,7 +233,7 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
         var outbox = await OutboxForVisitAsync(services, visitId);
         await using (var downPublisher = new RabbitMqMessagePublisher(broker, Options.Create(new OutboxPublisherOptions())))
         {
-            Assert.Equal(new OutboxBatchResult(1, 0, 1), await MessagingInfrastructure.Processor(services, downPublisher, clock).ProcessBatchAsync(Cancellation));
+            Assert.Equal(new OutboxBatchResult(4, 0, 1), await MessagingInfrastructure.Processor(services, downPublisher, clock).ProcessBatchAsync(Cancellation));
         }
 
         Assert.Empty(signalR.Published);
@@ -238,7 +243,7 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
         clock.Advance(TimeSpan.FromSeconds(3));
         await using (var publisher = new RabbitMqMessagePublisher(broker, Options.Create(new OutboxPublisherOptions())))
         {
-            Assert.Equal(new OutboxBatchResult(1, 1, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
+            Assert.Equal(new OutboxBatchResult(4, 4, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
         }
 
         await Wait.UntilAsync(() => Task.FromResult(signalR.Published.Any(m => m.MessageId == outbox.Id)), "the live broadcast");

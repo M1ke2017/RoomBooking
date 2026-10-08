@@ -26,7 +26,7 @@ CrewCall is divided into the following bounded contexts:
 | **Resources** | Vehicles, Equipment, resource availability: *with what* the work is done | `CrewCall.Resources` |
 | **Scheduling** | Visits, Assignments, the operational calendar, conflict detection, matching, rescheduling: *when* and *by whom* | `CrewCall.Scheduling` (orchestration, C#) + `CrewCall.Scheduling.Core` (decisions, F#) |
 | **Integrations** | Synchronisation with external systems (Google Calendar, Outlook, ...). External calendars are integration targets, never the system of record | `CrewCall.Integrations` since Sprint 12: outbox publisher and integration consumers (ADR-0014); since Sprint 13 also the live-operations consumer and SignalR hub (ADR-0015) |
-| **Reporting** | Read models and reports built from operational history | *not created yet* |
+| **Reporting** | Read models and reports built from operational history | `CrewCall.Reporting` since Sprint 14: a separate service with its own database, event-driven projections and the Reporting API (ADR-0016) |
 
 Supporting projects:
 
@@ -37,9 +37,15 @@ Supporting projects:
 - `CrewCall.Web`: Blazor web client. Talks to the API over HTTP and, since Sprint 13, listens to the live operations
   SignalR hub in `CrewCall.Integrations` (ADR-0015). References only `CrewCall.Contracts`, never modules.
 
-Reporting is deliberately **not** created as a project yet (Integrations appeared in Sprint 12 with the outbox
-publisher, ADR-0014). Projects appear when the first real
-process (calendar sync, report projection) justifies them.
+- `CrewCall.Messaging` (Sprint 14): the shared RabbitMQ plumbing (connection, exchange, manual-ACK consumer base).
+  Transport only; used by CrewCall.Integrations and CrewCall.Reporting.
+- `CrewCall.Reporting` (Sprint 14): a separate service with its own database (`crewcall_reporting`). It builds
+  event-driven projections from integration events and serves the read-only Reporting API (ADR-0016). It references
+  only Contracts, Messaging and ServiceDefaults, never Persistence or a module, and never reads the operational
+  database.
+
+Integrations appeared in Sprint 12 with the outbox publisher (ADR-0014), and Reporting in Sprint 14 with the first
+report projections. Business modules stay in-process in CrewCall.Api: a new service does not move them.
 
 ### Dependency rules
 

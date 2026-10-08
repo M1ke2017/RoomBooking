@@ -253,7 +253,9 @@ public sealed class IncidentService(IWorkOrdersDbContext db, TimeProvider clock)
             incident.Description,
             IncidentLifecycle.ToWorkOrderPriority(incident.Priority),
             now);
-        var visit = VisitService.Add(db, command.VisitId, workOrder.Id, incident.RequestedStart, incident.RequestedEnd, notes: null, now);
+        var visit = VisitService.Add(
+            db, command.VisitId, new VisitWorkOrder(workOrder.Id, workOrder.CustomerId, workOrder.SiteId, workOrder.Priority),
+            incident.RequestedStart, incident.RequestedEnd, notes: null, now);
 
         if (!incident.TryDispatch(workOrder.Id, now))
         {

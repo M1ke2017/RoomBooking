@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace CrewCall.Integrations.Messaging;
+namespace CrewCall.Messaging;
 
-/// <summary>Readiness of the broker connection for this service. The API does not depend on it (ADR-0014).</summary>
+/// <summary>Readiness of the broker connection for a consuming service. The API does not depend on it (ADR-0014).</summary>
 public sealed class RabbitMqHealthCheck(RabbitMqConnection connection) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
