@@ -1,12 +1,14 @@
+using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 
-namespace CrewCall.Integrations.Messaging;
+namespace CrewCall.Messaging;
 
 /// <summary>
 /// The service's broker connection, opened on first use and reopened after it was lost. The address comes from the
 /// "crewcall-rabbitmq" connection string, which Aspire supplies (ADR-0014); nothing is hard-coded.
+/// <paramref name="clientName"/> names the connection in the RabbitMQ management UI (e.g. "crewcall-reporting").
 /// </summary>
-public sealed class RabbitMqConnection(IConfiguration configuration) : IAsyncDisposable
+public sealed class RabbitMqConnection(IConfiguration configuration, string clientName = "crewcall") : IAsyncDisposable
 {
     public const string ConnectionStringName = "crewcall-rabbitmq";
 
@@ -41,7 +43,7 @@ public sealed class RabbitMqConnection(IConfiguration configuration) : IAsyncDis
             var factory = new ConnectionFactory
             {
                 Uri = new Uri(connectionString),
-                ClientProvidedName = "crewcall-integrations",
+                ClientProvidedName = clientName,
                 // Reconnection is done here, on the next use, so a lost connection never hides behind a recovering one.
                 AutomaticRecoveryEnabled = false
             };

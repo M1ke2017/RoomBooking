@@ -109,9 +109,16 @@ public sealed class OutboxAtomicityTests(CrewCallApiFactory factory)
              incidentPayload.GetProperty("assignmentId").GetGuid(), incidentPayload.GetProperty("technicianId").GetGuid()));
         Assert.Single(await OutboxForAsync(dispatched.Assignment.AssignmentId), m => m.Type == "assignment.created");
 
-        // The visit's history has many operational events (created, status changes, work started...); only the
-        // completion is published.
-        var visitMessage = Assert.Single(await OutboxForAsync(dispatched.VisitId));
+        // The visit's history has more operational events (work started, pauses...); only its creation, its status
+        // changes and the completion are published (Sprint 14).
+        var visitMessages = await OutboxForAsync(dispatched.VisitId);
+        Assert.Equal(
+            ["visit.created", "visit.status-changed", "visit.status-changed", "visit.work-completed"],
+            visitMessages.Select(m => m.Type).Order());
+        var created = Payload(Assert.Single(visitMessages, m => m.Type == "visit.created"));
+        Assert.Equal((dispatched.VisitId, dispatched.WorkOrderId, incident.SiteId),
+            (created.GetProperty("visitId").GetGuid(), created.GetProperty("workOrderId").GetGuid(), created.GetProperty("siteId").GetGuid()));
+        var visitMessage = Assert.Single(visitMessages, m => m.Type == "visit.work-completed");
         Assert.Equal(("visit.work-completed", "visit.work.completed"), (visitMessage.Type, visitMessage.RoutingKey));
         var visitPayload = Payload(visitMessage);
         Assert.Equal((dispatched.VisitId, completed.ExecutionId!.Value, completed.Metrics.NetWorkMinutes!.Value),

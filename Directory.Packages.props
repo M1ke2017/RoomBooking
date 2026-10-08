@@ -37,6 +37,10 @@
   <ItemGroup Label="Messaging">
     <!-- Plain RabbitMQ.Client (no MassTransit): the outbox publisher and consumers are explicit (ADR-0014). -->
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup Label="Time zones">

@@ -145,7 +145,9 @@ outbox message and the envelope.
 - We want the mechanics to be explicit and owned: outbox claiming, confirms, ACK semantics and idempotency.
 - MassTransit would hide most of that, brings licensing questions for newer versions, and offers abstractions we do not
   need.
-- `RabbitMQ.Client` is used directly, only in `CrewCall.Integrations`, without building a general messaging framework.
+- `RabbitMQ.Client` is used directly, without building a general messaging framework. It is used only by the
+  messaging services: `CrewCall.Integrations` and, since Sprint 14, `CrewCall.Reporting`, through the small shared
+  `CrewCall.Messaging` library (ADR-0016). It is never used by business modules or the API.
 
 ### 11. Multiple publishers
 

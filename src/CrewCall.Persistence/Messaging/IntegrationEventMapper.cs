@@ -39,6 +39,14 @@ public sealed class IntegrationEventMapper : IIntegrationEventMapper
                 completed.VisitId, completed.ExecutionId, completed.TravelDurationMinutes,
                 completed.GrossWorkMinutes, completed.PauseMinutes, completed.NetWorkMinutes),
 
+            (WorkOrderEvents.VisitCreated, VisitCreatedPayload created) => new VisitCreatedIntegrationEvent(
+                NewId(), occurredAtUtc, correlationId,
+                created.VisitId, created.WorkOrderId, created.CustomerId, created.SiteId, created.Start, created.End, occurredAtUtc,
+                created.Priority.ToString()),
+
+            (WorkOrderEvents.VisitStatusChanged, VisitStatusChangedPayload changed) => new VisitStatusChangedIntegrationEvent(
+                NewId(), occurredAtUtc, correlationId, changed.VisitId, changed.OldStatus.ToString(), changed.NewStatus.ToString()),
+
             _ => null
         };
 

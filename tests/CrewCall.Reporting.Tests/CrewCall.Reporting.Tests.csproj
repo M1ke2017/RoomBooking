@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Reporting tests (ADR-0016): projections, idempotency, out-of-order delivery and replay against a real PostgreSQL;
+    the consumer against a real RabbitMQ; the Reporting API; and the end-to-end path from a business operation in
+    CrewCall.Api through the outbox (CrewCall.Integrations) to a report. Testcontainers, so Docker is required.
+    The three hosts all have a Program class, so each is referenced under its own alias.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.RabbitMq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CrewCall.Reporting\CrewCall.Reporting.csproj" Aliases="reporting" />
+    <ProjectReference Include="..\..\src\CrewCall.Api\CrewCall.Api.csproj" Aliases="api" />
+    <ProjectReference Include="..\..\src\CrewCall.Integrations\CrewCall.Integrations.csproj" Aliases="integrations" />
+  </ItemGroup>
+
+</Project>

@@ -3,6 +3,7 @@ using CrewCall.Contracts.Live;
 using CrewCall.Integrations.Consumers;
 using CrewCall.Integrations.Live;
 using CrewCall.Integrations.Messaging;
+using CrewCall.Messaging;
 using CrewCall.Persistence;
 using CrewCall.Persistence.Messaging;
 using OpenTelemetry.Trace;
@@ -26,7 +27,7 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddOptions<OutboxPublisherOptions>().Bind(builder.Configuration.GetSection("Outbox"));
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<RabbitMqConnection>();
+builder.Services.AddSingleton(services => new RabbitMqConnection(services.GetRequiredService<IConfiguration>(), "crewcall-integrations"));
 builder.Services.AddSingleton<IIntegrationMessagePublisher, RabbitMqMessagePublisher>();
 builder.Services.AddSingleton<OutboxProcessor>();
 builder.Services.AddHostedService<OutboxPublisherWorker>();

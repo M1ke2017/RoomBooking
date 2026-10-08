@@ -42,22 +42,22 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
             return new CreateVisitOutcome.Invalid(errors.ToDictionary());
         }
 
-        var workOrderStatus = await db.WorkOrders
+        var workOrder = await db.WorkOrders
             .Where(workOrder => workOrder.Id == command.WorkOrderId)
-            .Select(workOrder => (WorkOrderStatus?)workOrder.Status)
+            .Select(workOrder => new { workOrder.Status, Context = new VisitWorkOrder(workOrder.Id, workOrder.CustomerId, workOrder.SiteId, workOrder.Priority) })
             .SingleOrDefaultAsync(cancellationToken);
 
-        if (workOrderStatus is null)
+        if (workOrder is null)
         {
             return new CreateVisitOutcome.WorkOrderNotFound(command.WorkOrderId);
         }
 
-        if (WorkOrderLifecycle.IsTerminal(workOrderStatus.Value))
+        if (WorkOrderLifecycle.IsTerminal(workOrder.Status))
         {
-            return new CreateVisitOutcome.WorkOrderClosed(command.WorkOrderId, workOrderStatus.Value);
+            return new CreateVisitOutcome.WorkOrderClosed(command.WorkOrderId, workOrder.Status);
         }
 
-        var visit = Add(db, Guid.CreateVersion7(), command.WorkOrderId, start!.Value, end!.Value, notes, StoredTime.UtcNow(clock));
+        var visit = Add(db, Guid.CreateVersion7(), workOrder.Context, start!.Value, end!.Value, notes, StoredTime.UtcNow(clock));
 
         // One SaveChanges: the visit and its event are written in a single transaction.
         await db.SaveChangesAsync(cancellationToken);
@@ -70,9 +70,9 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
     /// The one creation path, also used when an incident is dispatched.
     /// </summary>
     internal static Visit Add(
-        IWorkOrdersDbContext db, Guid visitId, Guid workOrderId, DateTimeOffset start, DateTimeOffset end, string? notes, DateTimeOffset now)
+        IWorkOrdersDbContext db, Guid visitId, VisitWorkOrder workOrder, DateTimeOffset start, DateTimeOffset end, string? notes, DateTimeOffset now)
     {
-        var visit = new Visit(visitId, workOrderId, start, end, notes, now);
+        var visit = new Visit(visitId, workOrder.Id, start, end, notes, now);
 
         db.Visits.Add(visit);
         db.AppendOperationalEvent(
@@ -80,7 +80,7 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
             WorkOrderEvents.VisitAggregate,
             visit.Id,
             now,
-            new VisitCreatedPayload(visit.Id, visit.WorkOrderId, visit.Start, visit.End));
+            new VisitCreatedPayload(visit.Id, visit.WorkOrderId, visit.Start, visit.End, workOrder.CustomerId, workOrder.SiteId, workOrder.Priority));
 
         return visit;
     }
@@ -162,3 +162,6 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
         return new ChangeVisitStatusOutcome.Changed(visit, oldStatus);
     }
 }
+
+/// <summary>The work order a new visit belongs to, with the context its VisitCreated event records.</summary>
+internal sealed record VisitWorkOrder(Guid Id, Guid CustomerId, Guid SiteId, WorkOrderPriority Priority);

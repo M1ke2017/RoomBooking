@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The shared RabbitMQ plumbing of the services that consume integration events (ADR-0014, ADR-0016): the broker
+    connection, the crewcall.events exchange, the manual-ACK consumer base and the broker health check. Transport only:
+    no persistence, no projections, no business logic. Referenced by CrewCall.Integrations and CrewCall.Reporting, never
+    by business modules or the API.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrewCall.Contracts\CrewCall.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+  </ItemGroup>
+
+</Project>

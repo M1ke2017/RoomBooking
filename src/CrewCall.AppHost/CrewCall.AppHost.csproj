@@ -17,6 +17,7 @@
     <ProjectReference Include="..\CrewCall.Api\CrewCall.Api.csproj" />
     <ProjectReference Include="..\CrewCall.Web\CrewCall.Web.csproj" />
     <ProjectReference Include="..\CrewCall.Integrations\CrewCall.Integrations.csproj" />
+    <ProjectReference Include="..\CrewCall.Reporting\CrewCall.Reporting.csproj" />
   </ItemGroup>
 
 </Project>

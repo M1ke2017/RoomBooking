@@ -21,9 +21,11 @@ public static class IntegrationEventCatalog
     public static readonly IntegrationEventDescriptor AssignmentCancelled = new("assignment.cancelled", 1, "assignment.cancelled");
     public static readonly IntegrationEventDescriptor IncidentDispatched = new("incident.dispatched", 1, "incident.dispatched");
     public static readonly IntegrationEventDescriptor VisitWorkCompleted = new("visit.work-completed", 1, "visit.work.completed");
+    public static readonly IntegrationEventDescriptor VisitCreated = new("visit.created", 1, "visit.created");
+    public static readonly IntegrationEventDescriptor VisitStatusChanged = new("visit.status-changed", 1, "visit.status.changed");
 
     public static IReadOnlyList<IntegrationEventDescriptor> All { get; } =
-        [AssignmentCreated, AssignmentReplaced, AssignmentCancelled, IncidentDispatched, VisitWorkCompleted];
+        [AssignmentCreated, AssignmentReplaced, AssignmentCancelled, IncidentDispatched, VisitWorkCompleted, VisitCreated, VisitStatusChanged];
 
     /// <summary>JSON for payloads and envelopes: camelCase, enums as strings.</summary>
     public static JsonSerializerOptions JsonOptions { get; } = new(JsonSerializerDefaults.Web)
@@ -38,6 +40,8 @@ public static class IntegrationEventCatalog
         AssignmentCancelledIntegrationEvent => AssignmentCancelled,
         IncidentDispatchedIntegrationEvent => IncidentDispatched,
         VisitWorkCompletedIntegrationEvent => VisitWorkCompleted,
+        VisitCreatedIntegrationEvent => VisitCreated,
+        VisitStatusChangedIntegrationEvent => VisitStatusChanged,
         _ => throw new ArgumentException($"{integrationEvent.GetType().Name} is not a published integration event.", nameof(integrationEvent))
     };
 

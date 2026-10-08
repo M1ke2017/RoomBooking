@@ -1,9 +1,10 @@
 using CrewCall.Contracts.Integration;
-using CrewCall.Integrations.Messaging;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
-namespace CrewCall.Integrations.Consumers;
+namespace CrewCall.Messaging;
 
 /// <summary>
 /// A message from which no consumer can ever succeed (e.g. a payload that does not match its contract): it is rejected
@@ -12,7 +13,7 @@ namespace CrewCall.Integrations.Consumers;
 public sealed class PoisonMessageException(string message, Exception? innerException = null) : Exception(message, innerException);
 
 /// <summary>
-/// The RabbitMQ side of a consumer of integration events, shared by every consumer (ADR-0014, ADR-0015):
+/// The RabbitMQ side of a consumer of integration events, shared by every consumer (ADR-0014, ADR-0015, ADR-0016):
 /// - manual acknowledgements: a message is ACKed only after <see cref="HandleAsync"/> returned, i.e. after the consumer's
 ///   effect succeeded and its inbox record was written (or it was recognized as a duplicate);
 /// - a body that is not a valid envelope, or a <see cref="PoisonMessageException"/>, is rejected without requeue;
