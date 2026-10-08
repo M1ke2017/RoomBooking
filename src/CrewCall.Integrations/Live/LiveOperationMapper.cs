@@ -27,7 +27,8 @@ public static class LiveOperationMapper
         IntegrationEventCatalog.AssignmentReplaced.RoutingKey,
         IntegrationEventCatalog.AssignmentCancelled.RoutingKey,
         IntegrationEventCatalog.IncidentDispatched.RoutingKey,
-        IntegrationEventCatalog.VisitWorkCompleted.RoutingKey
+        IntegrationEventCatalog.VisitWorkCompleted.RoutingKey,
+        IntegrationEventCatalog.VisitRescheduled.RoutingKey
     ];
 
     /// <summary>
@@ -44,6 +45,7 @@ public static class LiveOperationMapper
             ("assignment.cancelled", 1) => typeof(AssignmentCancelledIntegrationEvent),
             ("incident.dispatched", 1) => typeof(IncidentDispatchedIntegrationEvent),
             ("visit.work-completed", 1) => typeof(VisitWorkCompletedIntegrationEvent),
+            ("visit.rescheduled", 1) => typeof(VisitRescheduledIntegrationEvent),
             _ => null
         };
 
@@ -68,60 +70,22 @@ public static class LiveOperationMapper
     }
 
     /// <summary>
-    /// The live message for a supported integration event. MessageId and CorrelationId are the envelope's, unchanged, so
-    /// the browser sees the outbox id and can deduplicate.
+    /// The live message for a supported integration event: its type and the entity that changed. MessageId and
+    /// CorrelationId are the envelope's, unchanged, so the browser sees the outbox id and can deduplicate.
     /// </summary>
-    public static LiveOperationMessage Map(IntegrationEventEnvelope envelope, IIntegrationEvent integrationEvent, LiveRoutingContext routing)
+    public static LiveOperationMessage Map(IntegrationEventEnvelope envelope, IIntegrationEvent integrationEvent)
     {
-        var (type, entityType, entityId, action, related, summary) = integrationEvent switch
+        var (type, entityId) = integrationEvent switch
         {
-            AssignmentCreatedIntegrationEvent created => (
-                LiveOperationTypes.AssignmentCreated, LiveEntityTypes.Assignment, created.AssignmentId, LiveOperationActions.Created,
-                Related(routing, [Ref(LiveEntityTypes.Visit, created.VisitId), Ref(LiveEntityTypes.Technician, created.TechnicianId)]),
-                $"Assignment created for visit {Short(created.VisitId)}."),
-
-            AssignmentReplacedIntegrationEvent replaced => (
-                LiveOperationTypes.AssignmentReplaced, LiveEntityTypes.Assignment, replaced.NewAssignmentId, LiveOperationActions.Replaced,
-                Related(routing, [Ref(LiveEntityTypes.Assignment, replaced.OldAssignmentId), Ref(LiveEntityTypes.Visit, replaced.VisitId)]),
-                $"Assignment of visit {Short(replaced.VisitId)} replaced."),
-
-            AssignmentCancelledIntegrationEvent cancelled => (
-                LiveOperationTypes.AssignmentCancelled, LiveEntityTypes.Assignment, cancelled.AssignmentId, LiveOperationActions.Cancelled,
-                Related(routing, [Ref(LiveEntityTypes.Visit, cancelled.VisitId)]),
-                $"Assignment of visit {Short(cancelled.VisitId)} cancelled."),
-
-            IncidentDispatchedIntegrationEvent dispatched => (
-                LiveOperationTypes.IncidentDispatched, LiveEntityTypes.Incident, dispatched.IncidentId, LiveOperationActions.Dispatched,
-                Related(routing,
-                [
-                    Ref(LiveEntityTypes.WorkOrder, dispatched.WorkOrderId), Ref(LiveEntityTypes.Visit, dispatched.VisitId),
-                    Ref(LiveEntityTypes.Assignment, dispatched.AssignmentId), Ref(LiveEntityTypes.Technician, dispatched.TechnicianId)
-                ]),
-                $"Incident {Short(dispatched.IncidentId)} dispatched."),
-
-            VisitWorkCompletedIntegrationEvent completed => (
-                LiveOperationTypes.VisitWorkCompleted, LiveEntityTypes.Visit, completed.VisitId, LiveOperationActions.Completed,
-                Related(routing, [Ref(LiveEntityTypes.Execution, completed.ExecutionId)]),
-                $"Work on visit {Short(completed.VisitId)} completed."),
-
-            _ => throw new ArgumentException(
-                $"{integrationEvent.GetType().Name} has no live mapping.", nameof(integrationEvent))
+            AssignmentCreatedIntegrationEvent created => (LiveOperationTypes.AssignmentCreated, created.AssignmentId),
+            AssignmentReplacedIntegrationEvent replaced => (LiveOperationTypes.AssignmentReplaced, replaced.NewAssignmentId),
+            AssignmentCancelledIntegrationEvent cancelled => (LiveOperationTypes.AssignmentCancelled, cancelled.AssignmentId),
+            IncidentDispatchedIntegrationEvent dispatched => (LiveOperationTypes.IncidentDispatched, dispatched.IncidentId),
+            VisitWorkCompletedIntegrationEvent completed => (LiveOperationTypes.VisitWorkCompleted, completed.VisitId),
+            VisitRescheduledIntegrationEvent rescheduled => (LiveOperationTypes.VisitRescheduled, rescheduled.VisitId),
+            _ => throw new ArgumentException($"{integrationEvent.GetType().Name} has no live mapping.", nameof(integrationEvent))
         };
 
-        return new LiveOperationMessage(
-            envelope.MessageId, type, envelope.OccurredAtUtc, entityType, entityId, action, envelope.CorrelationId, related, summary);
+        return new LiveOperationMessage(envelope.MessageId, type, entityId, envelope.OccurredAtUtc, envelope.CorrelationId);
     }
-
-    private static LiveEntityReference Ref(string entityType, Guid entityId) => new(entityType, entityId);
-
-    // The event's own references, then the looked-up technicians and site; each entity once.
-    private static IReadOnlyList<LiveEntityReference> Related(LiveRoutingContext routing, IEnumerable<LiveEntityReference> fromEvent) =>
-        fromEvent
-            .Concat(routing.TechnicianIds.Select(technicianId => Ref(LiveEntityTypes.Technician, technicianId)))
-            .Concat(routing.SiteId is { } siteId ? [Ref(LiveEntityTypes.Site, siteId)] : [])
-            .Where(reference => reference.EntityId != Guid.Empty)
-            .Distinct()
-            .ToList();
-
-    private static string Short(Guid id) => id.ToString("N")[..8];
 }

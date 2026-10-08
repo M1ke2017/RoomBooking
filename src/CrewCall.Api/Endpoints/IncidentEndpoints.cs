@@ -1,4 +1,5 @@
 using CrewCall.Contracts.Incidents;
+using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Incidents;
 using CrewCall.WorkOrders.Incidents;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -6,8 +7,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 namespace CrewCall.Api.Endpoints;
 
 /// <summary>
-/// The urgent incident workflow (ADR-0012). Create, list, read, resolve and cancel are WorkOrders operations; analyze,
-/// prepare-dispatch and dispatch are Scheduling's <see cref="UrgentIncidentService"/>. Only dispatch claims resources.
+/// The urgent incident workflow (ADR-0012, ADR-0017). Create, list, read, resolve and cancel are WorkOrders operations;
+/// analyze, prepare-dispatch, dispatch, reschedule-proposal and its apply are Scheduling's <see cref="UrgentIncidentService"/>.
+/// Only dispatch and apply change the plan.
 /// </summary>
 internal static class IncidentEndpoints
 {
@@ -20,6 +22,8 @@ internal static class IncidentEndpoints
         incidents.MapPost("/{id:guid}/analyze", AnalyzeAsync).WithName("AnalyzeIncident");
         incidents.MapPost("/{id:guid}/prepare-dispatch", PrepareDispatchAsync).WithName("PrepareIncidentDispatch");
         incidents.MapPost("/{id:guid}/dispatch", DispatchAsync).WithName("DispatchIncident");
+        incidents.MapPost("/{id:guid}/reschedule-proposal", ProposeRescheduleAsync).WithName("ProposeIncidentReschedule");
+        incidents.MapPost("/{id:guid}/reschedule-proposal/apply", ApplyRescheduleAsync).WithName("ApplyIncidentReschedule");
         incidents.MapPost("/{id:guid}/resolve", ResolveAsync).WithName("ResolveIncident");
         incidents.MapPost("/{id:guid}/cancel", CancelAsync).WithName("CancelIncident");
 
@@ -119,16 +123,70 @@ internal static class IncidentEndpoints
         switch (outcome)
         {
             case IncidentDispatchOutcome.Dispatched dispatched:
-                var incident = await incidents.GetAsync(id, cancellationToken)
-                    ?? throw new InvalidOperationException($"Incident '{id}' disappeared after dispatch.");
                 return TypedResults.Created(
                     $"/api/work-orders/{dispatched.WorkOrderId}",
-                    new IncidentDispatchResponse(incident.ToResponse(), dispatched.WorkOrderId, dispatched.VisitId, dispatched.Assignment.ToResponse()));
+                    await DispatchResponseAsync(id, dispatched.WorkOrderId, dispatched.VisitId, dispatched.Assignment, incidents, cancellationToken));
             case IncidentDispatchOutcome.Invalid invalid:
                 return TypedResults.ValidationProblem(invalid.Errors);
             default:
                 return ToProblem(id, outcome);
         }
+    }
+
+    /// <summary>
+    /// 200 with up to 5 proposals, smallest impact first (advice: nothing is written). A proposal may move one
+    /// lower-priority visit; the manager decides by applying it.
+    /// </summary>
+    private static async Task<Results<Ok<RescheduleProposal[]>, ValidationProblem, ProblemHttpResult>> ProposeRescheduleAsync(
+        Guid id, RescheduleProposalRequest? request, UrgentIncidentService workflow, CancellationToken cancellationToken)
+    {
+        var outcome = await workflow.ProposeRescheduleAsync(id, request ?? new RescheduleProposalRequest(null, null, null, null, null), cancellationToken);
+
+        return outcome switch
+        {
+            IncidentDispatchOutcome.Proposed proposed => TypedResults.Ok(proposed.Proposals.ToArray()),
+            IncidentDispatchOutcome.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
+            _ => ToProblem(id, outcome)
+        };
+    }
+
+    /// <summary>
+    /// 201 Created: the incident dispatched and, when the proposal moves a visit, that visit moved, in one transaction.
+    /// 409 when anything changed since the proposal (stale), the resources are taken, or the incident was already
+    /// dispatched (for example by a second manager); nothing is written then.
+    /// </summary>
+    private static async Task<Results<Created<ApplyRescheduleResponse>, ValidationProblem, ProblemHttpResult>> ApplyRescheduleAsync(
+        Guid id, ApplyRescheduleRequest request, UrgentIncidentService workflow, IncidentService incidents, CancellationToken cancellationToken)
+    {
+        var outcome = await workflow.ApplyRescheduleAsync(id, request, cancellationToken);
+
+        switch (outcome)
+        {
+            case IncidentDispatchOutcome.Rescheduled rescheduled:
+                return TypedResults.Created(
+                    $"/api/work-orders/{rescheduled.WorkOrderId}",
+                    new ApplyRescheduleResponse(
+                        await DispatchResponseAsync(id, rescheduled.WorkOrderId, rescheduled.VisitId, rescheduled.Assignment, incidents, cancellationToken),
+                        rescheduled.MovedVisit));
+            case IncidentDispatchOutcome.Dispatched dispatched:
+                return TypedResults.Created(
+                    $"/api/work-orders/{dispatched.WorkOrderId}",
+                    new ApplyRescheduleResponse(
+                        await DispatchResponseAsync(id, dispatched.WorkOrderId, dispatched.VisitId, dispatched.Assignment, incidents, cancellationToken),
+                        null));
+            case IncidentDispatchOutcome.Invalid invalid:
+                return TypedResults.ValidationProblem(invalid.Errors);
+            default:
+                return ToProblem(id, outcome);
+        }
+    }
+
+    private static async Task<IncidentDispatchResponse> DispatchResponseAsync(
+        Guid id, Guid workOrderId, Guid visitId, Assignment assignment, IncidentService incidents, CancellationToken cancellationToken)
+    {
+        var incident = await incidents.GetAsync(id, cancellationToken)
+            ?? throw new InvalidOperationException($"Incident '{id}' disappeared after dispatch.");
+        return new IncidentDispatchResponse(incident.ToResponse(), workOrderId, visitId, assignment.ToResponse());
     }
 
     /// <summary>Dispatched → Resolved. The work order and visit are not completed automatically.</summary>
@@ -172,6 +230,7 @@ internal static class IncidentEndpoints
                 ["reasons"] = rejected.Reasons.Select(SchedulingEndpoints.ToConflictResponse).ToArray(),
                 ["impact"] = rejected.Impact.Select(ToResponse).ToArray()
             }),
+        IncidentDispatchOutcome.Stale stale => ApiProblems.Conflict("Proposal out of date", $"{stale.Reason} Request a new proposal."),
         _ => throw new InvalidOperationException($"Unhandled outcome {outcome.GetType().Name}.")
     };
 

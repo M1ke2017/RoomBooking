@@ -107,6 +107,45 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
         return true;
     }
 
+    /// <summary>
+    /// Adds the visit's move and its VisitRescheduled and RescheduleApplied events to the unit of work, WITHOUT saving:
+    /// the urgent incident workflow commits them with the dispatch, in one transaction. The visit is loaded tracked, so
+    /// its row version guards the commit against a concurrent change. False (nothing staged) when the visit does not exist
+    /// or is no longer Planned: only planned visits move.
+    /// </summary>
+    public async Task<bool> StageRescheduleForIncidentAsync(StageVisitReschedule command, CancellationToken cancellationToken)
+    {
+        var visit = await db.Visits.SingleOrDefaultAsync(v => v.Id == command.VisitId, cancellationToken);
+        if (visit is null)
+        {
+            return false;
+        }
+
+        var (oldStart, oldEnd) = (visit.Start, visit.End);
+        var (newStart, newEnd) = (StoredTime.Normalize(command.NewStart), StoredTime.Normalize(command.NewEnd));
+        if (!visit.TryReschedule(newStart, newEnd))
+        {
+            return false;
+        }
+
+        var now = StoredTime.UtcNow(clock);
+        db.AppendOperationalEvent(
+            WorkOrderEvents.VisitRescheduled,
+            WorkOrderEvents.VisitAggregate,
+            visit.Id,
+            now,
+            new VisitRescheduledPayload(visit.Id, oldStart, oldEnd, newStart, newEnd, VisitRescheduleReasons.UrgentIncident, command.IncidentId));
+        db.AppendOperationalEvent(
+            IncidentEvents.RescheduleApplied,
+            IncidentEvents.IncidentAggregate,
+            command.IncidentId,
+            now,
+            new RescheduleAppliedPayload(
+                command.IncidentId, command.UrgentVisitId, visit.Id, command.TechnicianId, (int)(newStart - oldStart).TotalMinutes));
+
+        return true;
+    }
+
     /// <summary>Returns the work order's visits ordered by start, or null when the work order does not exist.</summary>
     public async Task<IReadOnlyList<Visit>?> ListForWorkOrderAsync(Guid workOrderId, CancellationToken cancellationToken)
     {
@@ -165,3 +204,9 @@ public sealed class VisitService(IWorkOrdersDbContext db, TimeProvider clock)
 
 /// <summary>The work order a new visit belongs to, with the context its VisitCreated event records.</summary>
 internal sealed record VisitWorkOrder(Guid Id, Guid CustomerId, Guid SiteId, WorkOrderPriority Priority);
+
+/// <summary>Why a visit was rescheduled.</summary>
+public static class VisitRescheduleReasons
+{
+    public const string UrgentIncident = nameof(UrgentIncident);
+}

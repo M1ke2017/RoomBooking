@@ -1,97 +1,56 @@
 using System.Text.Json;
-using CrewCall.Messaging;
 using CrewCall.Contracts.Integration;
 using CrewCall.Contracts.Live;
 using CrewCall.Integrations.Live;
+using CrewCall.Messaging;
 using Xunit;
 using static CrewCall.Integrations.Tests.LiveTestKit;
 
 namespace CrewCall.Integrations.Tests;
 
-/// <summary>The explicit integration event → live message mapping (ADR-0015).</summary>
+/// <summary>
+/// The explicit integration event → live message mapping (ADR-0015). Since Sprint 15 (ADR-0017) the message is a change
+/// hint only: type, the entity that changed, time and ids; the groups are routing, decided on the server.
+/// </summary>
 public sealed class LiveOperationMappingTests
 {
     private static readonly Guid Correlation = Guid.NewGuid();
-    private static readonly Guid SiteId = Guid.NewGuid();
     private static readonly Guid VisitId = Guid.NewGuid();
     private static readonly Guid TechnicianId = Guid.NewGuid();
 
-    private static LiveOperationMessage MapThrough(IIntegrationEvent integrationEvent, LiveRoutingContext routing)
+    private static LiveOperationMessage MapThrough(IIntegrationEvent integrationEvent)
     {
         var envelope = Envelope(integrationEvent);
         var read = LiveOperationMapper.ReadEvent(envelope);
-        Assert.Equal(integrationEvent, read, new EventComparer());
-        return LiveOperationMapper.Map(envelope, read!, routing);
+        Assert.Equal(IntegrationEventCatalog.SerializePayload(integrationEvent), IntegrationEventCatalog.SerializePayload(read!));
+        return LiveOperationMapper.Map(envelope, read!);
     }
 
-    private static void AssertRelated(LiveOperationMessage message, params (string Type, Guid Id)[] expected) =>
+    public static TheoryData<IIntegrationEvent, string, Guid> Events()
+    {
+        var assignment = Guid.NewGuid();
+        var newAssignment = Guid.NewGuid();
+        var incident = Guid.NewGuid();
+        return new()
+        {
+            { new AssignmentCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, Correlation, assignment, VisitId, TechnicianId, null, []), "assignment.created", assignment },
+            { new AssignmentReplacedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, assignment, newAssignment, VisitId), "assignment.replaced", newAssignment },
+            { new AssignmentCancelledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, assignment, VisitId), "assignment.cancelled", assignment },
+            { new IncidentDispatchedIntegrationEvent(Guid.NewGuid(), OccurredAt, Correlation, incident, Guid.NewGuid(), VisitId, assignment, TechnicianId), "incident.dispatched", incident },
+            { new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, Guid.NewGuid(), 12m, 60m, 5m, 55m), "visit.work.completed", VisitId },
+            { new VisitRescheduledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, OccurredAt, OccurredAt.AddHours(1), OccurredAt.AddHours(4), OccurredAt.AddHours(5), "UrgentIncident", incident), "visit.rescheduled", VisitId }
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(Events))]
+    public void Each_supported_event_maps_to_its_live_type_and_the_entity_that_changed(IIntegrationEvent integrationEvent, string type, Guid entityId)
+    {
+        var message = MapThrough(integrationEvent);
+
         Assert.Equal(
-            expected.Select(e => new LiveEntityReference(e.Type, e.Id)).OrderBy(r => r.EntityType).ThenBy(r => r.EntityId),
-            message.Related.OrderBy(r => r.EntityType).ThenBy(r => r.EntityId));
-
-    [Fact]
-    public void Assignment_created_maps_to_an_assignment_created_message_about_the_assignment()
-    {
-        var created = new AssignmentCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, Correlation, Guid.NewGuid(), VisitId, TechnicianId, null, []);
-
-        var message = MapThrough(created, new LiveRoutingContext(SiteId, []));
-
-        Assert.Equal(
-            (created.EventId, "assignment.created", OccurredAt, "assignment", created.AssignmentId, "created", (Guid?)Correlation),
-            (message.MessageId, message.Type, message.OccurredAtUtc, message.EntityType, message.EntityId, message.Action, message.CorrelationId));
-        AssertRelated(message, ("visit", VisitId), ("technician", TechnicianId), ("site", SiteId));
-    }
-
-    [Fact]
-    public void Assignment_replaced_maps_to_the_new_assignment_and_tells_both_technicians()
-    {
-        var replaced = new AssignmentReplacedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), VisitId);
-        var newTechnician = Guid.NewGuid();
-
-        var message = MapThrough(replaced, new LiveRoutingContext(SiteId, [TechnicianId, newTechnician]));
-
-        Assert.Equal(("assignment.replaced", "assignment", replaced.NewAssignmentId, "replaced"),
-            (message.Type, message.EntityType, message.EntityId, message.Action));
-        AssertRelated(message, ("assignment", replaced.OldAssignmentId), ("visit", VisitId),
-            ("technician", TechnicianId), ("technician", newTechnician), ("site", SiteId));
-    }
-
-    [Fact]
-    public void Assignment_cancelled_maps_to_an_assignment_cancelled_message()
-    {
-        var cancelled = new AssignmentCancelledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), VisitId);
-
-        var message = MapThrough(cancelled, new LiveRoutingContext(SiteId, [TechnicianId]));
-
-        Assert.Equal(("assignment.cancelled", "assignment", cancelled.AssignmentId, "cancelled"),
-            (message.Type, message.EntityType, message.EntityId, message.Action));
-        AssertRelated(message, ("visit", VisitId), ("technician", TechnicianId), ("site", SiteId));
-    }
-
-    [Fact]
-    public void Incident_dispatched_maps_to_an_incident_message_with_its_work_order_visit_assignment_and_technician()
-    {
-        var dispatched = new IncidentDispatchedIntegrationEvent(
-            Guid.NewGuid(), OccurredAt, Correlation, Guid.NewGuid(), Guid.NewGuid(), VisitId, Guid.NewGuid(), TechnicianId);
-
-        var message = MapThrough(dispatched, new LiveRoutingContext(SiteId, []));
-
-        Assert.Equal(("incident.dispatched", "incident", dispatched.IncidentId, "dispatched", (Guid?)Correlation),
-            (message.Type, message.EntityType, message.EntityId, message.Action, message.CorrelationId));
-        AssertRelated(message, ("workOrder", dispatched.WorkOrderId), ("visit", VisitId), ("assignment", dispatched.AssignmentId),
-            ("technician", TechnicianId), ("site", SiteId));
-    }
-
-    [Fact]
-    public void Visit_work_completed_maps_to_the_live_type_visit_work_completed()
-    {
-        var completed = new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, Guid.NewGuid(), 12m, 60m, 5m, 55m);
-
-        var message = MapThrough(completed, new LiveRoutingContext(SiteId, [TechnicianId]));
-
-        // The integration type is "visit.work-completed"; the live type is the routing-key-style "visit.work.completed".
-        Assert.Equal(("visit.work.completed", "visit", VisitId, "completed"), (message.Type, message.EntityType, message.EntityId, message.Action));
-        AssertRelated(message, ("execution", completed.ExecutionId), ("technician", TechnicianId), ("site", SiteId));
+            new LiveOperationMessage(integrationEvent.EventId, type, entityId, OccurredAt, integrationEvent.CorrelationId),
+            message);
     }
 
     [Fact]
@@ -100,23 +59,12 @@ public sealed class LiveOperationMappingTests
         var created = new AssignmentCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, Correlation, Guid.NewGuid(), VisitId, TechnicianId, null, []);
         var envelope = Envelope(created);
 
-        var first = LiveOperationMapper.Map(envelope, LiveOperationMapper.ReadEvent(envelope)!, LiveRoutingContext.None);
-        var second = LiveOperationMapper.Map(envelope, LiveOperationMapper.ReadEvent(envelope)!, LiveRoutingContext.None);
+        var first = LiveOperationMapper.Map(envelope, LiveOperationMapper.ReadEvent(envelope)!);
+        var second = LiveOperationMapper.Map(envelope, LiveOperationMapper.ReadEvent(envelope)!);
 
         Assert.Equal(envelope.MessageId, first.MessageId);
-        Assert.Equal(first.MessageId, second.MessageId);
+        Assert.Equal(first, second);
         Assert.Equal(Correlation, first.CorrelationId);
-    }
-
-    [Fact]
-    public void Without_routing_context_the_message_only_carries_what_the_event_says()
-    {
-        var completed = new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, Guid.NewGuid(), null, 60m, 0m, 60m);
-
-        var message = MapThrough(completed, LiveRoutingContext.None);
-
-        AssertRelated(message, ("execution", completed.ExecutionId));
-        Assert.Equal([LiveOperationGroups.All], LiveOperationGroups.For(message));
     }
 
     [Theory]
@@ -148,28 +96,24 @@ public sealed class LiveOperationMappingTests
     {
         var envelope = Envelope(new AssignmentCancelledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), VisitId));
 
-        Assert.Throws<ArgumentException>(() => LiveOperationMapper.Map(envelope, new UnknownEvent(envelope.MessageId), LiveRoutingContext.None));
+        Assert.Throws<ArgumentException>(() => LiveOperationMapper.Map(envelope, new UnknownEvent(envelope.MessageId)));
     }
 
     [Fact]
-    public void The_live_queue_is_bound_to_exactly_the_five_supported_routing_keys()
+    public void The_live_queue_is_bound_to_exactly_the_supported_routing_keys()
     {
         Assert.Equal(
-            ["assignment.created", "assignment.replaced", "assignment.cancelled", "incident.dispatched", "visit.work.completed"],
+            ["assignment.created", "assignment.replaced", "assignment.cancelled", "incident.dispatched", "visit.work.completed", "visit.rescheduled"],
             LiveOperationMapper.SupportedRoutingKeys);
         Assert.Equal(LiveOperationTypes.All.Count, LiveOperationMapper.SupportedRoutingKeys.Count);
     }
 
     [Fact]
-    public void A_live_message_is_small_and_never_carries_an_entity_or_integration_payload()
+    public void A_live_message_is_only_a_change_hint_and_never_carries_a_copy_of_the_entity()
     {
-        var properties = typeof(LiveOperationMessage).GetProperties().ToDictionary(p => p.Name, p => p.PropertyType);
-
         Assert.Equal(
-            ["MessageId", "Type", "OccurredAtUtc", "EntityType", "EntityId", "Action", "CorrelationId", "Related", "Summary"],
-            properties.Keys);
-        Assert.All(properties.Values, type => Assert.True(
-            type.Namespace is "System" or "System.Collections.Generic" || type == typeof(IReadOnlyList<LiveEntityReference>), type.FullName));
+            ["MessageId", "Type", "EntityId", "OccurredAtUtc", "CorrelationId"],
+            typeof(LiveOperationMessage).GetProperties().Select(p => p.Name));
     }
 
     private sealed record UnknownEvent(Guid EventId) : IIntegrationEvent
@@ -177,14 +121,5 @@ public sealed class LiveOperationMappingTests
         public DateTimeOffset OccurredAtUtc => OccurredAt;
 
         public Guid? CorrelationId => null;
-    }
-
-    // Records with list fields compare lists by reference; compare their JSON instead.
-    private sealed class EventComparer : IEqualityComparer<IIntegrationEvent?>
-    {
-        public bool Equals(IIntegrationEvent? x, IIntegrationEvent? y) =>
-            x is not null && y is not null && IntegrationEventCatalog.SerializePayload(x) == IntegrationEventCatalog.SerializePayload(y);
-
-        public int GetHashCode(IIntegrationEvent? obj) => 0;
     }
 }

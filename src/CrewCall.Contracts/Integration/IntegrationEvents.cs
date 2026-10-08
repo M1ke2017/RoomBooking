@@ -82,3 +82,21 @@ public sealed record VisitStatusChangedIntegrationEvent(
     Guid VisitId,
     string OldStatus,
     string NewStatus) : IIntegrationEvent;
+
+/// <summary>
+/// visit.rescheduled v1 (Sprint 15): a visit kept its identity and moved to a new window, e.g. to make room for an
+/// urgent incident.
+/// </summary>
+/// <param name="Reason">Why it moved, e.g. "UrgentIncident".</param>
+/// <param name="IncidentId">The urgent incident that displaced it, if any.</param>
+public sealed record VisitRescheduledIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredAtUtc,
+    Guid? CorrelationId,
+    Guid VisitId,
+    DateTimeOffset OldStartUtc,
+    DateTimeOffset OldEndUtc,
+    DateTimeOffset NewStartUtc,
+    DateTimeOffset NewEndUtc,
+    string Reason,
+    Guid? IncidentId) : IIntegrationEvent;

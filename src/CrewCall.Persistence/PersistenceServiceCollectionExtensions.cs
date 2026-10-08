@@ -27,12 +27,10 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IResourcesDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
         services.AddScoped<ISchedulingDbContext>(provider => provider.GetRequiredService<CrewCallDbContext>());
 
-        // Messaging (ADR-0014): the explicit operational → integration event mapping, the request's correlation id,
+        // Messaging (ADR-0014): the request's correlation id,
         // the outbox writer (the same context, so outbox messages join the business transaction) and the stores used
         // by the publisher and consumers.
-        services.AddSingleton<IIntegrationEventMapper, IntegrationEventMapper>();
         services.AddScoped<CorrelationContext>();
-        services.AddScoped<ICorrelationContext>(provider => provider.GetRequiredService<CorrelationContext>());
         services.AddScoped<IOutboxWriter>(provider => provider.GetRequiredService<CrewCallDbContext>());
         services.AddScoped<OutboxStore>();
         services.AddScoped<InboxStore>();

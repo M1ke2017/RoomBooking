@@ -37,7 +37,7 @@ builder.Services.AddHostedService<IntegrationAuditConsumer>();
 // Live operations (ADR-0015): RabbitMQ → live consumer → SignalR. The hub is a delivery channel, never a source of truth.
 builder.Services.AddSignalR();
 builder.Services.AddOptions<LiveOperationsOptions>().Bind(builder.Configuration.GetSection("LiveOperations"));
-builder.Services.AddScoped<ILiveRoutingLookup, DbLiveRoutingLookup>();
+builder.Services.AddScoped<LiveRoutingLookup>();
 builder.Services.AddSingleton<ILiveOperationsPublisher, SignalRLiveOperationsPublisher>();
 builder.Services.AddSingleton<LiveOperationsHandler>();
 builder.Services.AddHostedService<LiveOperationsConsumer>();

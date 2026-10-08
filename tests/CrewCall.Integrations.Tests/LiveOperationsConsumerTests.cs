@@ -107,8 +107,8 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
 
         Assert.Equal([InboxConsumers.IntegrationAudit, LiveConsumer], await InboxConsumersAsync(services, outbox.Id));
         var broadcast = Assert.Single(signalR.Published);
-        Assert.Equal((outbox.Id, LiveOperationTypes.VisitWorkCompleted, visitId), (broadcast.MessageId, broadcast.Type, broadcast.EntityId));
-        Assert.Contains(new LiveEntityReference(LiveEntityTypes.Site, siteId), broadcast.Related);
+        Assert.Equal((outbox.Id, LiveOperationTypes.VisitWorkCompleted, visitId), (broadcast.MessageId, broadcast.Message.Type, broadcast.Message.EntityId));
+        Assert.Contains(LiveOperationGroups.Site(siteId), broadcast.Groups);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
         var replacedAssignment = await BusinessFlow.InsertAssignmentAsync(services, visitId, previous, "Replaced");
         var activeAssignment = await BusinessFlow.InsertAssignmentAsync(services, visitId, current, "Active");
         await using var scope = services.CreateAsyncScope();
-        var lookup = scope.ServiceProvider.GetRequiredService<ILiveRoutingLookup>();
+        var lookup = scope.ServiceProvider.GetRequiredService<LiveRoutingLookup>();
         var at = LiveTestKit.OccurredAt;
 
         var completed = await lookup.ResolveAsync(new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), at, null, visitId, Guid.NewGuid(), null, 1m, 0m, 1m), Cancellation);
@@ -274,8 +274,8 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
 
         var received = await everything.NextAsync();
         Assert.Equal(
-            (outbox.Id, "visit.work.completed", "visit", visitId, "completed", outbox.OccurredAtUtc),
-            (received.MessageId, received.Type, received.EntityType, received.EntityId, received.Action, received.OccurredAtUtc));
+            (outbox.Id, "visit.work.completed", visitId, outbox.OccurredAtUtc),
+            (received.MessageId, received.Type, received.EntityId, received.OccurredAtUtc));
         Assert.Equal(outbox.Id, (await site.NextAsync()).MessageId);
 
         // The audit consumer handled the same message too: one inbox record per consumer.

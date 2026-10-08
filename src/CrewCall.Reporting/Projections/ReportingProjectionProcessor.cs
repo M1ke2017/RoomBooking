@@ -50,6 +50,7 @@ public sealed class ReportingProjectionProcessor(
     private static readonly IncidentDispatchedProjectionHandler IncidentDispatched = new();
     private static readonly VisitCreatedProjectionHandler VisitCreated = new();
     private static readonly VisitStatusChangedProjectionHandler VisitStatusChanged = new();
+    private static readonly VisitRescheduledProjectionHandler VisitRescheduled = new();
     private static readonly VisitWorkCompletedProjectionHandler VisitWorkCompleted = new();
 
     public async Task<ProjectionResult> ProcessAsync(IntegrationEventEnvelope envelope, CancellationToken cancellationToken)
@@ -126,6 +127,7 @@ public sealed class ReportingProjectionProcessor(
             IncidentDispatchedIntegrationEvent dispatched => IncidentDispatched.ApplyAsync(dispatched, context, cancellationToken),
             VisitCreatedIntegrationEvent visitCreated => VisitCreated.ApplyAsync(visitCreated, context, cancellationToken),
             VisitStatusChangedIntegrationEvent statusChanged => VisitStatusChanged.ApplyAsync(statusChanged, context, cancellationToken),
+            VisitRescheduledIntegrationEvent rescheduled => VisitRescheduled.ApplyAsync(rescheduled, context, cancellationToken),
             VisitWorkCompletedIntegrationEvent completed => VisitWorkCompleted.ApplyAsync(completed, context, cancellationToken),
             _ => throw new ArgumentException($"{integrationEvent.GetType().Name} has no projection handler.", nameof(integrationEvent))
         };
@@ -138,6 +140,7 @@ public sealed class ReportingProjectionProcessor(
         IncidentDispatchedIntegrationEvent => IncidentDispatched.Name,
         VisitCreatedIntegrationEvent => VisitCreated.Name,
         VisitStatusChangedIntegrationEvent => VisitStatusChanged.Name,
+        VisitRescheduledIntegrationEvent => VisitRescheduled.Name,
         VisitWorkCompletedIntegrationEvent => VisitWorkCompleted.Name,
         _ => integrationEvent.GetType().Name
     };

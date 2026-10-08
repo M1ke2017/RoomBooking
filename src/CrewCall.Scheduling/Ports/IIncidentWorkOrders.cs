@@ -21,21 +21,52 @@ public interface IIncidentWorkOrders
     /// </summary>
     Task<IncidentDispatchStaging> StageDispatchAsync(IncidentDispatchPlan plan, CancellationToken cancellationToken);
 
-    /// <summary>The work order of each existing visit among <paramref name="visitIds"/>.</summary>
-    Task<IReadOnlyDictionary<Guid, Guid>> GetWorkOrderIdsAsync(IReadOnlyCollection<Guid> visitIds, CancellationToken cancellationToken);
+    /// <summary>
+    /// The plan of each existing visit among <paramref name="visitIds"/>: window, status, and its work order's customer,
+    /// site and priority. What an impact (the work orders involved) and a reschedule (who is affected, may it move) need.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, VisitPlanInfo>> GetVisitPlansAsync(IReadOnlyCollection<Guid> visitIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Adds the move of a Planned visit to a new window, with its VisitRescheduled and RescheduleApplied events, to the
+    /// shared unit of work WITHOUT saving (Sprint 15): the caller commits it together with the dispatch. False (nothing
+    /// staged) when the visit no longer exists or is no longer Planned.
+    /// </summary>
+    Task<bool> StageVisitRescheduleAsync(VisitReschedulePlan plan, CancellationToken cancellationToken);
 }
+
+/// <summary>Mirrors the WorkOrders work order priorities, lowest first, without depending on the WorkOrders module.</summary>
+public enum PlanPriority
+{
+    Low,
+    Normal,
+    High,
+    Urgent
+}
+
+/// <param name="Start">UTC.</param>
+/// <param name="End">UTC.</param>
+/// <param name="Priority">The visit's work order's priority.</param>
+public sealed record VisitPlanInfo(
+    Guid VisitId, Guid WorkOrderId, Guid CustomerId, Guid SiteId, PlanPriority Priority, DateTimeOffset Start, DateTimeOffset End, VisitState State);
+
+/// <summary>The move decided by Scheduling: the displaced visit's new window, for which incident, urgent visit and technician.</summary>
+public sealed record VisitReschedulePlan(
+    Guid VisitId, DateTimeOffset NewStart, DateTimeOffset NewEnd, Guid IncidentId, Guid UrgentVisitId, Guid TechnicianId);
 
 /// <param name="RequestedStart">UTC.</param>
 /// <param name="RequestedEnd">UTC.</param>
 /// <param name="RequiredSkillCodes">Normalized codes.</param>
 /// <param name="WorkOrderId">Set once the incident has been dispatched.</param>
+/// <param name="Priority">The incident's priority in work order terms: the priority its work order gets on dispatch.</param>
 public sealed record IncidentSchedulingInfo(
     Guid IncidentId,
     IncidentState State,
     DateTimeOffset RequestedStart,
     DateTimeOffset RequestedEnd,
     IReadOnlyList<string> RequiredSkillCodes,
-    Guid? WorkOrderId);
+    Guid? WorkOrderId,
+    PlanPriority Priority);
 
 /// <summary>Mirrors the WorkOrders incident statuses without depending on the WorkOrders module.</summary>
 public enum IncidentState

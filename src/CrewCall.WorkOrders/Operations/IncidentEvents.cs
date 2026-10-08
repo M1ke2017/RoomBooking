@@ -12,6 +12,7 @@ public static class IncidentEvents
     public const string IncidentDispatched = nameof(IncidentDispatched);
     public const string IncidentResolved = nameof(IncidentResolved);
     public const string IncidentCancelled = nameof(IncidentCancelled);
+    public const string RescheduleApplied = nameof(RescheduleApplied);
 }
 
 public sealed record IncidentCreatedPayload(
@@ -47,3 +48,10 @@ public sealed record IncidentDispatchedPayload(
 public sealed record IncidentResolvedPayload(Guid IncidentId, Guid? WorkOrderId, DateTimeOffset ResolvedAtUtc);
 
 public sealed record IncidentCancelledPayload(Guid IncidentId, IncidentStatus OldStatus);
+
+/// <summary>
+/// The manager's decision to dispatch an incident by moving one lower-priority visit (Sprint 15): which visit made room,
+/// for which urgent visit and technician, and by how much it was delayed.
+/// </summary>
+public sealed record RescheduleAppliedPayload(
+    Guid IncidentId, Guid UrgentVisitId, Guid MovedVisitId, Guid TechnicianId, int DelayMinutes);

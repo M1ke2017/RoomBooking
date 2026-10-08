@@ -31,18 +31,12 @@ namespace CrewCall.Persistence;
 /// Each module works through its own narrow interface and sees only the sets it owns.
 /// Entity mapping lives in <c>Configurations/</c>, one <see cref="IEntityTypeConfiguration{TEntity}"/> per entity.
 /// </summary>
-/// <param name="integrationEvents">
-/// Which operational events are also published (ADR-0014); the explicit <see cref="IntegrationEventMapper"/> by default.
-/// </param>
 /// <param name="correlation">The current request's correlation id, written to events and outbox messages.</param>
 public sealed class CrewCallDbContext(
     DbContextOptions<CrewCallDbContext> options,
-    IIntegrationEventMapper? integrationEvents = null,
-    ICorrelationContext? correlation = null)
+    CorrelationContext? correlation = null)
     : DbContext(options), IWorkOrdersDbContext, IWorkforceDbContext, IResourcesDbContext, ISchedulingDbContext, IOutboxWriter
 {
-    private readonly IIntegrationEventMapper _integrationEvents = integrationEvents ?? new IntegrationEventMapper();
-
     private static readonly JsonSerializerOptions _payloadJsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -100,7 +94,7 @@ public sealed class CrewCallDbContext(
     /// <remarks>
     /// Only adds rows to the change tracker: they are inserted by the caller's next SaveChanges, which EF Core runs in one
     /// transaction together with the state changes. There is no separate save for events. When the event is one that is
-    /// published (<see cref="IIntegrationEventMapper"/>), its outbox message is added to the same unit of work, so the
+    /// published (<see cref="IntegrationEventMapper"/>), its outbox message is added to the same unit of work, so the
     /// business change, its history and its outgoing message commit together or not at all (ADR-0014).
     /// </remarks>
     public void AppendOperationalEvent(string eventType, string aggregateType, Guid aggregateId, DateTimeOffset occurredAtUtc, object payload)
@@ -114,7 +108,7 @@ public sealed class CrewCallDbContext(
         OperationalEvents.Add(new OperationalEvent(
             Guid.CreateVersion7(), occurredAtUtc, eventType, aggregateType, aggregateId, payloadJson, correlationId));
 
-        if (_integrationEvents.Map(eventType, occurredAtUtc, payload, correlationId) is { } integrationEvent)
+        if (IntegrationEventMapper.Map(eventType, occurredAtUtc, payload, correlationId) is { } integrationEvent)
         {
             AddOutboxMessage(integrationEvent, aggregateType, aggregateId);
         }

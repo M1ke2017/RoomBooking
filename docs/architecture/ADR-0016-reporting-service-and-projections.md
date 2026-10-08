@@ -110,10 +110,13 @@ SignalR               Reporting Inbox        (reporting.inbox_messages)
   know RabbitMQ. The consumer (`ReportingConsumer`) and any replay use the same processor.
 - **Consumer mechanics:** reused from the shared `IntegrationEventConsumer` base — manual ACK after the commit, NACK
   with requeue on failure, reject invalid or poison messages, reconnect.
-- **Queue:** `crewcall.reporting`, durable, bound to exactly the seven routing keys it projects:
+- **Queue:** `crewcall.reporting`, durable, bound to exactly the routing keys it projects:
   - `assignment.created`, `assignment.replaced`, `assignment.cancelled`;
   - `incident.dispatched`;
-  - `visit.work.completed`, `visit.created`, `visit.status.changed`.
+  - `visit.work.completed`, `visit.created`, `visit.status.changed`;
+  - `visit.rescheduled` (Sprint 15, ADR-0017): `RescheduleCount` and `TotalDelayMinutes` on the visit, counted once
+    per message thanks to the inbox. The planned window follows the latest plan by business time
+    (`PlannedChangedAtUtc`), so a late `visit.created` never overwrites a move.
 - **Not projected:** any other type or version is ACKed and ignored with a warning; nothing is recorded for it.
 
 ### 5. Eventual consistency

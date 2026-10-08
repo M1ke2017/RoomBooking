@@ -33,6 +33,22 @@ public sealed class Visit
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
+    /// <summary>
+    /// Moves a Planned visit to a new window, keeping its identity, work order and duration-independent data. Only a visit
+    /// that has not started can move; returns false (and changes nothing) otherwise.
+    /// </summary>
+    internal bool TryReschedule(DateTimeOffset start, DateTimeOffset end)
+    {
+        if (Status != VisitStatus.Planned || start >= end)
+        {
+            return false;
+        }
+
+        Start = start;
+        End = end;
+        return true;
+    }
+
     /// <summary>Moves to <paramref name="target"/> when the lifecycle allows it; otherwise changes nothing and returns false.</summary>
     internal bool TryTransitionTo(VisitStatus target)
     {

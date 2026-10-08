@@ -74,7 +74,6 @@
                     <th scope="col">Occurred at (UTC)</th>
                     <th scope="col">Type</th>
                     <th scope="col">Entity</th>
-                    <th scope="col">Summary</th>
                     <th scope="col">MessageId</th>
                 </tr>
             </thead>
@@ -84,8 +83,7 @@
                     <tr>
                         <td>@message.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
                         <td><code>@message.Type</code></td>
-                        <td><code>@message.EntityType:@message.EntityId</code></td>
-                        <td class="detail">@message.Summary</td>
+                        <td><code>@message.EntityId</code></td>
                         <td><code>@message.MessageId</code></td>
                     </tr>
                 }
