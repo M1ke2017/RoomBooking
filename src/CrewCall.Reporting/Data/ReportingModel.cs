@@ -74,6 +74,18 @@ public sealed class VisitActivity
 
     public DateTimeOffset? PlannedEndUtc { get; set; }
 
+    /// <summary>
+    /// When the business change that set the planned window happened (visit.created or visit.rescheduled): the latest
+    /// one wins, so a late visit.created never overwrites a newer plan.
+    /// </summary>
+    public DateTimeOffset? PlannedChangedAtUtc { get; set; }
+
+    /// <summary>How many times the visit was moved (visit.rescheduled).</summary>
+    public int RescheduleCount { get; set; }
+
+    /// <summary>The sum of the moves' delays (new start − old start), in minutes.</summary>
+    public int TotalDelayMinutes { get; set; }
+
     public Guid? ExecutionId { get; set; }
 
     public decimal? ActualTravelMinutes { get; set; }

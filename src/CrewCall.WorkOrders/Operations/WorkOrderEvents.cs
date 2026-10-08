@@ -13,6 +13,7 @@ public static class WorkOrderEvents
     public const string WorkOrderStatusChanged = nameof(WorkOrderStatusChanged);
     public const string VisitCreated = nameof(VisitCreated);
     public const string VisitStatusChanged = nameof(VisitStatusChanged);
+    public const string VisitRescheduled = nameof(VisitRescheduled);
 }
 
 public sealed record WorkOrderCreatedPayload(Guid WorkOrderId, Guid CustomerId, Guid SiteId, WorkOrderPriority Priority);
@@ -27,3 +28,15 @@ public sealed record VisitCreatedPayload(
     Guid VisitId, Guid WorkOrderId, DateTimeOffset Start, DateTimeOffset End, Guid CustomerId, Guid SiteId, WorkOrderPriority Priority);
 
 public sealed record VisitStatusChangedPayload(Guid VisitId, Visits.VisitStatus OldStatus, Visits.VisitStatus NewStatus);
+
+/// <summary>The visit kept its identity and moved to a new window (Sprint 15).</summary>
+/// <param name="Reason">Why it moved, e.g. "UrgentIncident".</param>
+/// <param name="IncidentId">The urgent incident that displaced it, if any.</param>
+public sealed record VisitRescheduledPayload(
+    Guid VisitId,
+    DateTimeOffset OldStart,
+    DateTimeOffset OldEnd,
+    DateTimeOffset NewStart,
+    DateTimeOffset NewEnd,
+    string Reason,
+    Guid? IncidentId);

@@ -46,6 +46,9 @@ The system never moves, cancels or reassigns existing visits or assignments, and
   `RequiresReschedule`, together with the **impact**: the conflicting reservation, its visit, that visit's work order,
   the resource and the reserved window.
 - Rescheduling is the operator's decision and an explicit separate action (reassign, cancel) on that other work.
+- *Sprint 15 (ADR-0017):* a reschedule **proposal** may suggest moving ONE strictly lower-priority planned visit to its
+  next free slot. It moves only when a manager applies it, in one transaction with the dispatch. Nothing is ever
+  displaced automatically.
 - Likewise, cancelling a dispatched incident is refused (409). Its work order, visit and assignment are never cancelled
   as a hidden side effect.
 

@@ -275,6 +275,9 @@ internal sealed class GatedIncidentWorkOrders(IIncidentWorkOrders inner, Dispatc
         return await inner.StageDispatchAsync(plan, cancellationToken);
     }
 
-    public Task<IReadOnlyDictionary<Guid, Guid>> GetWorkOrderIdsAsync(IReadOnlyCollection<Guid> visitIds, CancellationToken cancellationToken) =>
-        inner.GetWorkOrderIdsAsync(visitIds, cancellationToken);
+    public Task<IReadOnlyDictionary<Guid, VisitPlanInfo>> GetVisitPlansAsync(IReadOnlyCollection<Guid> visitIds, CancellationToken cancellationToken) =>
+        inner.GetVisitPlansAsync(visitIds, cancellationToken);
+
+    public Task<bool> StageVisitRescheduleAsync(VisitReschedulePlan plan, CancellationToken cancellationToken) =>
+        inner.StageVisitRescheduleAsync(plan, cancellationToken);
 }

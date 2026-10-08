@@ -77,7 +77,8 @@ public sealed record TechnicianSummaryReport(
 /// <summary>
 /// A visit, planned versus actual. PlannedDurationMinutes and VarianceMinutes (ActualNetWorkMinutes −
 /// PlannedDurationMinutes) are derived when the report is built, never stored; the variance is null without an actual.
-/// Fields an event has not delivered yet are null.
+/// Fields an event has not delivered yet are null. RescheduleCount and TotalDelayMinutes say how often, and by how much in
+/// total, the visit was moved (visit.rescheduled); the planned window is the current one.
 /// </summary>
 public sealed record VisitActivityItem(
     Guid VisitId,
@@ -94,7 +95,9 @@ public sealed record VisitActivityItem(
     decimal? ActualNetWorkMinutes,
     decimal? VarianceMinutes,
     string Status,
-    DateTimeOffset? CompletedAtUtc);
+    DateTimeOffset? CompletedAtUtc,
+    int RescheduleCount,
+    int TotalDelayMinutes);
 
 /// <param name="Truncated">True when more visits matched than the report returns.</param>
 public sealed record VisitActivityReport(IReadOnlyList<VisitActivityItem> Visits, bool Truncated, ReportMetadata Metadata);

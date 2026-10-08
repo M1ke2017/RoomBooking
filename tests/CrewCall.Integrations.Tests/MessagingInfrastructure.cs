@@ -58,7 +58,7 @@ public sealed class MessagingInfrastructure : IAsyncLifetime
             .AddSingleton<IActiveAssignmentCheck, AlwaysAssigned>()
             .AddCrewCallPersistence(databaseConnectionString ?? DatabaseConnectionString)
             .AddWorkOrdersModule()
-            .AddScoped<Live.ILiveRoutingLookup, Live.DbLiveRoutingLookup>()
+            .AddScoped<Live.LiveRoutingLookup>()
             .BuildServiceProvider();
 
     public RabbitMqConnection Broker(string? connectionString = null) =>

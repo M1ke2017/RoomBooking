@@ -206,6 +206,49 @@ public sealed class ProjectionTests(ReportingInfrastructure infrastructure) : IA
         Assert.Null(ReportingQueries.OperationalUtilization([Day(0m, 0m, 0m)]));
     }
 
+    // ---- rescheduling ----
+
+    [Fact]
+    public async Task A_reschedule_moves_the_planned_window_counts_once_and_adds_its_delay_even_when_redelivered()
+    {
+        var (visitId, technicianId, incidentId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await _harness.ProcessAsync(VisitCreated(visitId, Day1.AddHours(10.5), TimeSpan.FromHours(1.5)));
+        await _harness.ProcessAsync(AssignmentCreated(Guid.NewGuid(), visitId, technicianId, Day1.AddHours(7)));
+        var moved = Envelope(Rescheduled(visitId, Day1.AddHours(10.5), Day1.AddHours(14), TimeSpan.FromHours(1.5), Day1.AddHours(9), incidentId));
+
+        Assert.Equal(ProjectionResult.Applied, await _harness.ProcessAsync(moved));
+        Assert.Equal(ProjectionResult.Duplicate, await _harness.ProcessAsync(moved));
+
+        var visit = (await _harness.VisitAsync(visitId))!;
+        Assert.Equal((1, 210, Day1.AddHours(14), Day1.AddHours(15.5), "Planned"),
+            (visit.RescheduleCount, visit.TotalDelayMinutes, visit.PlannedStartUtc!.Value, visit.PlannedEndUtc!.Value, visit.VisitStatus));
+
+        // The visit report shows the current plan and the reschedule effect.
+        var item = Assert.Single((await _harness.QueryAsync(q => q.VisitsAsync(new VisitReportFilter(technicianId, null, null, null, null), Cancellation))).Visits);
+        Assert.Equal((Day1.AddHours(14), 90m, 1, 210), (item.PlannedStartUtc!.Value, item.PlannedDurationMinutes!.Value, item.RescheduleCount, item.TotalDelayMinutes));
+    }
+
+    [Fact]
+    public async Task Reschedules_give_the_same_rows_in_any_order_and_a_late_visit_created_never_overwrites_a_newer_plan()
+    {
+        var visitId = Guid.NewGuid();
+        var created = Envelope(VisitCreated(visitId, Day1.AddHours(9), TimeSpan.FromHours(1), at: Day1.AddHours(-24)));
+        var first = Envelope(Rescheduled(visitId, Day1.AddHours(9), Day1.AddHours(11), TimeSpan.FromHours(1), Day1.AddHours(7)));
+        var second = Envelope(Rescheduled(visitId, Day1.AddHours(11), Day1.AddHours(13.5), TimeSpan.FromHours(1), Day1.AddHours(8)));
+
+        await _harness.ProcessAllAsync([created, first, second]);
+        var inOrder = await _harness.VisitAsync(visitId);
+        await _harness.ResetAsync();
+        await _harness.ProcessAllAsync([second, first, created]);
+        var reversed = await _harness.VisitAsync(visitId);
+
+        foreach (var visit in new[] { inOrder!, reversed! })
+        {
+            Assert.Equal((2, 270, Day1.AddHours(13.5), Day1.AddHours(14.5), Day1.AddHours(8)),
+                (visit.RescheduleCount, visit.TotalDelayMinutes, visit.PlannedStartUtc!.Value, visit.PlannedEndUtc!.Value, visit.PlannedChangedAtUtc!.Value));
+        }
+    }
+
     private static DateOnly Day1Date => DateOnly.FromDateTime(Day1.UtcDateTime);
 
     /// <summary>Makes the reporting database reject this visit's row until disposed: a failure inside the projection.</summary>

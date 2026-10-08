@@ -46,4 +46,11 @@ public sealed class ResourceReservation
 
     /// <summary>UTC.</summary>
     public DateTimeOffset End { get; private set; }
+
+    /// <summary>Moves the reservation with its visit (Sprint 15). The exclusion constraint checks the new window on save.</summary>
+    internal void MoveTo(DateTimeOffset start, DateTimeOffset end)
+    {
+        Start = start;
+        End = end;
+    }
 }

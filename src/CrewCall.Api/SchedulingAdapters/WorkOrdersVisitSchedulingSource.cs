@@ -18,13 +18,15 @@ internal sealed class WorkOrdersVisitSchedulingSource(IWorkOrdersDbContext workO
 
         return visit is null
             ? null
-            : new VisitSchedulingInfo(visit.Id, visit.Start, visit.End, visit.Status switch
-            {
-                VisitStatus.Planned => VisitState.Planned,
-                VisitStatus.InProgress => VisitState.InProgress,
-                VisitStatus.Completed => VisitState.Completed,
-                VisitStatus.Cancelled => VisitState.Cancelled,
-                _ => throw new InvalidOperationException($"Unhandled visit status {visit.Status}.")
-            });
+            : new VisitSchedulingInfo(visit.Id, visit.Start, visit.End, ToState(visit.Status));
     }
+
+    internal static VisitState ToState(VisitStatus status) => status switch
+    {
+        VisitStatus.Planned => VisitState.Planned,
+        VisitStatus.InProgress => VisitState.InProgress,
+        VisitStatus.Completed => VisitState.Completed,
+        VisitStatus.Cancelled => VisitState.Cancelled,
+        _ => throw new InvalidOperationException($"Unhandled visit status {status}.")
+    };
 }

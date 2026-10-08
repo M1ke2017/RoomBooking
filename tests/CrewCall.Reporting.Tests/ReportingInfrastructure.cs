@@ -119,6 +119,10 @@ internal static class Events
     public static VisitStatusChangedIntegrationEvent StatusChanged(Guid visitId, string from, string to, DateTimeOffset at) =>
         new(Guid.NewGuid(), at, null, visitId, from, to);
 
+    public static VisitRescheduledIntegrationEvent Rescheduled(
+        Guid visitId, DateTimeOffset oldStart, DateTimeOffset newStart, TimeSpan length, DateTimeOffset at, Guid? incidentId = null) =>
+        new(Guid.NewGuid(), at, null, visitId, oldStart, oldStart + length, newStart, newStart + length, "UrgentIncident", incidentId);
+
     public static IncidentDispatchedIntegrationEvent IncidentDispatched(
         Guid incidentId, Guid visitId, Guid assignmentId, Guid technicianId, DateTimeOffset at) =>
         new(Guid.NewGuid(), at, null, incidentId, Guid.NewGuid(), visitId, assignmentId, technicianId);

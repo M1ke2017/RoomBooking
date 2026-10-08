@@ -127,23 +127,23 @@ No method takes a group name or any string: a client cannot join an arbitrary gr
 
 **Message.** `LiveOperationMessage` (`CrewCall.Contracts.Live`) is separate from the integration contracts, and small:
 
-- MessageId, Type, OccurredAtUtc, EntityType, EntityId, Action, CorrelationId;
-- `Related` entity references;
-- a short Summary.
+- MessageId, Type, EntityId, OccurredAtUtc, CorrelationId.
 
-It never carries entities, calendars or history.
+It means "entity X changed" and never carries entities, calendars or history. *(Simplified in Sprint 15, ADR-0017 §10:
+EntityType, Action, `Related` and Summary were removed; the type names the entity and the change.)*
 
 **Mapping.** `LiveOperationMapper` is the explicit table:
 
-| Integration event (v1) | Live type | Entity / action | Groups |
+| Integration event (v1) | Live type | EntityId | Groups |
 |---|---|---|---|
-| `assignment.created` | `assignment.created` | assignment / created | all, technician, site |
-| `assignment.replaced` | `assignment.replaced` | new assignment / replaced | all, old and new technician, site |
-| `assignment.cancelled` | `assignment.cancelled` | assignment / cancelled | all, technician, site |
-| `incident.dispatched` | `incident.dispatched` | incident / dispatched | all, incident, technician, site |
-| `visit.work-completed` | `visit.work.completed` | visit / completed | all, technician of the active assignment, site |
+| `assignment.created` | `assignment.created` | assignment | all, technician, site |
+| `assignment.replaced` | `assignment.replaced` | new assignment | all, old and new technician, site |
+| `assignment.cancelled` | `assignment.cancelled` | assignment | all, technician, site |
+| `incident.dispatched` | `incident.dispatched` | incident | all, incident, technician, site |
+| `visit.work-completed` | `visit.work.completed` | visit | all, technician of the active assignment, site |
+| `visit.rescheduled` *(Sprint 15)* | `visit.rescheduled` | visit | all, incident, technician of the active assignment, site |
 
-**Queue.** The live queue `crewcall.live-operations` is bound to exactly these five routing keys.
+**Queue.** The live queue `crewcall.live-operations` is bound to exactly these six routing keys.
 
 **Routing context.** The site, and technicians known only by assignment id, are not in the v1 events. The v1 contracts
 stay unchanged; instead there is a minimal read-only lookup:
