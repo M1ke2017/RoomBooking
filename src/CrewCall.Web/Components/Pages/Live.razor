@@ -1,0 +1,168 @@
+@page "/live"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@implements IAsyncDisposable
+@using CrewCall.Contracts.Live
+@using CrewCall.Web.Live
+@inject IServiceProvider Services
+@inject IConfiguration Configuration
+
+<PageTitle>CrewCall · Live operations (dev)</PageTitle>
+
+<section class="panel" aria-labelledby="live-operations">
+    <div class="panel-header">
+        <h1 id="live-operations">Live operations</h1>
+        <span class="live-state live-state-@state.ToString().ToLowerInvariant()">@state</span>
+    </div>
+
+    <p class="muted">
+        Developer tool. Messages are change hints delivered over SignalR, not state: a real screen refreshes the affected
+        data from the REST API when one arrives. After a reconnect, missed messages are not replayed.
+    </p>
+
+    @if (client is null)
+    {
+        <p>The live operations hub is not configured (run CrewCall through CrewCall.AppHost, or set <code>LiveOperations:HubUrl</code>).</p>
+    }
+    else
+    {
+        <dl class="meta">
+            <dt>Hub</dt>
+            <dd><code>@client.HubUrl</code></dd>
+            @if (client.LastError is { } error)
+            {
+                <dt>Last error</dt>
+                <dd>@error</dd>
+            }
+            <dt>Duplicates ignored</dt>
+            <dd>@client.DuplicatesIgnored</dd>
+        </dl>
+
+        @if (state == LiveConnectionState.Disconnected)
+        {
+            <button class="refresh" @onclick="ConnectAsync">Connect</button>
+        }
+
+        <h2>Subscriptions</h2>
+        <form class="live-subscribe" @onsubmit="SubscribeAsync">
+            <select @bind="kind" aria-label="Group">
+                @foreach (var option in Enum.GetValues<LiveSubscriptionKind>())
+                {
+                    <option value="@option">@option</option>
+                }
+            </select>
+            @if (kind != LiveSubscriptionKind.All)
+            {
+                <input @bind="id" placeholder="id (GUID)" aria-label="Id" size="38" />
+            }
+            <button type="submit">Subscribe</button>
+        </form>
+        @if (formError is not null)
+        {
+            <p class="error">@formError</p>
+        }
+        <ul class="live-subscriptions">
+            @foreach (var subscription in client.Subscriptions)
+            {
+                <li><code>@subscription</code> <button @onclick="() => UnsubscribeAsync(subscription)">Unsubscribe</button></li>
+            }
+        </ul>
+
+        <h2>Recent messages (last @LiveOperationsClient.Capacity)</h2>
+        <table class="status-table">
+            <thead>
+                <tr>
+                    <th scope="col">Occurred at (UTC)</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Entity</th>
+                    <th scope="col">Summary</th>
+                    <th scope="col">MessageId</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var message in client.Recent)
+                {
+                    <tr>
+                        <td>@message.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td><code>@message.Type</code></td>
+                        <td><code>@message.EntityType:@message.EntityId</code></td>
+                        <td class="detail">@message.Summary</td>
+                        <td><code>@message.MessageId</code></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private LiveOperationsClient? client;
+    private LiveConnectionState state = LiveConnectionState.Disconnected;
+    private LiveSubscriptionKind kind = LiveSubscriptionKind.All;
+    private string? id;
+    private string? formError;
+
+    protected override void OnInitialized()
+    {
+        if (LiveHubAddress.Resolve(Configuration) is { } hubUrl)
+        {
+            client = new LiveOperationsClient(hubUrl, Services.GetRequiredService<ILogger<LiveOperationsClient>>());
+            client.Changed += OnChanged;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && client is not null)
+        {
+            await client.SubscribeAsync(LiveSubscription.All, CancellationToken.None);
+            await ConnectAsync();
+        }
+    }
+
+    private Task ConnectAsync() => client!.StartAsync(CancellationToken.None);
+
+    private async Task SubscribeAsync()
+    {
+        formError = null;
+        LiveSubscription subscription;
+        if (kind == LiveSubscriptionKind.All)
+        {
+            subscription = LiveSubscription.All;
+        }
+        else if (Guid.TryParse(id, out var parsed) && parsed != Guid.Empty)
+        {
+            subscription = new LiveSubscription(kind, parsed);
+        }
+        else
+        {
+            formError = "Enter a valid, non-empty GUID.";
+            return;
+        }
+
+        try
+        {
+            await client!.SubscribeAsync(subscription, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            formError = exception.Message;
+        }
+    }
+
+    private Task UnsubscribeAsync(LiveSubscription subscription) => client!.UnsubscribeAsync(subscription, CancellationToken.None);
+
+    private void OnChanged()
+    {
+        state = client!.State;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (client is not null)
+        {
+            client.Changed -= OnChanged;
+            await client.DisposeAsync();
+        }
+    }
+}

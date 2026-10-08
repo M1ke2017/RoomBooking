@@ -25,7 +25,7 @@ CrewCall is divided into the following bounded contexts:
 | **Workforce** | Technicians, Teams, Skills, working hours, absences, workforce availability: *who* can do the work | `CrewCall.Workforce` |
 | **Resources** | Vehicles, Equipment, resource availability: *with what* the work is done | `CrewCall.Resources` |
 | **Scheduling** | Visits, Assignments, the operational calendar, conflict detection, matching, rescheduling: *when* and *by whom* | `CrewCall.Scheduling` (orchestration, C#) + `CrewCall.Scheduling.Core` (decisions, F#) |
-| **Integrations** | Synchronisation with external systems (Google Calendar, Outlook, ...). External calendars are integration targets, never the system of record | `CrewCall.Integrations` since Sprint 12: outbox publisher and integration consumers (ADR-0014) |
+| **Integrations** | Synchronisation with external systems (Google Calendar, Outlook, ...). External calendars are integration targets, never the system of record | `CrewCall.Integrations` since Sprint 12: outbox publisher and integration consumers (ADR-0014); since Sprint 13 also the live-operations consumer and SignalR hub (ADR-0015) |
 | **Reporting** | Read models and reports built from operational history | *not created yet* |
 
 Supporting projects:
@@ -34,7 +34,8 @@ Supporting projects:
 - `CrewCall.Contracts`: transport-agnostic contracts (events, requests, responses) that cross module boundaries.
   No transport-specific names (`RabbitMq...`, `Grpc...`).
 - `CrewCall.Persistence`: EF Core / PostgreSQL infrastructure (empty in Sprint 1).
-- `CrewCall.Web`: Blazor WebAssembly client. Talks to the API over HTTP only.
+- `CrewCall.Web`: Blazor web client. Talks to the API over HTTP and, since Sprint 13, listens to the live operations
+  SignalR hub in `CrewCall.Integrations` (ADR-0015). References only `CrewCall.Contracts`, never modules.
 
 Reporting is deliberately **not** created as a project yet (Integrations appeared in Sprint 12 with the outbox
 publisher, ADR-0014). Projects appear when the first real

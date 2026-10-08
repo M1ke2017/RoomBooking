@@ -49,7 +49,7 @@ public sealed class MessagingInfrastructure : IAsyncLifetime
 
     /// <summary>
     /// Persistence and the WorkOrders module (with every visit assigned) on the shared database, with the given clock: the
-    /// write side, as the API composes it.
+    /// write side, as the API composes it. Also the live consumer's read-only routing lookup.
     /// </summary>
     public ServiceProvider Services(TimeProvider clock, string? databaseConnectionString = null) =>
         new ServiceCollection()
@@ -57,6 +57,7 @@ public sealed class MessagingInfrastructure : IAsyncLifetime
             .AddSingleton<IActiveAssignmentCheck, AlwaysAssigned>()
             .AddCrewCallPersistence(databaseConnectionString ?? DatabaseConnectionString)
             .AddWorkOrdersModule()
+            .AddScoped<Live.ILiveRoutingLookup, Live.DbLiveRoutingLookup>()
             .BuildServiceProvider();
 
     public RabbitMqConnection Broker(string? connectionString = null) =>

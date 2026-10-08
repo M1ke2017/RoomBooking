@@ -226,7 +226,7 @@ public sealed class OutboxProcessorTests(MessagingInfrastructure infrastructure)
             await using var scope = services.CreateAsyncScope();
             var envelope = Messaging.RabbitMqMessagePublisher.ToEnvelope(delivery);
             results.Add(await scope.ServiceProvider.GetRequiredService<InboxStore>().ProcessOnceAsync(
-                envelope, clock.GetUtcNow(), db => InboxStore.AddReceipt(db, envelope, clock.GetUtcNow()), Cancellation));
+                InboxConsumers.IntegrationAudit, envelope, clock.GetUtcNow(), db => InboxStore.AddReceipt(db, envelope, clock.GetUtcNow()), Cancellation));
         }
 
         Assert.Equal([InboxResult.Processed, InboxResult.Duplicate], results);

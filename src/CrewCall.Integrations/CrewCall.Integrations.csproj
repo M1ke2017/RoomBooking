@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!--
-    Integrations service (ADR-0001, ADR-0014): a separate process with its own lifecycle. It publishes the transactional
-    outbox to RabbitMQ (crewcall.events) and runs the technical integration-audit consumer. The only project that
-    references RabbitMQ.Client: business modules and the API never talk to the broker.
+    Integrations service (ADR-0001, ADR-0014, ADR-0015): a separate process with its own lifecycle. It publishes the
+    transactional outbox to RabbitMQ (crewcall.events), runs the technical integration-audit consumer, and delivers live
+    operations: the live consumer and the SignalR hub (/hubs/live-operations). The only project that references
+    RabbitMQ.Client or hosts SignalR: business modules and the API never talk to the broker or to browsers.
   -->
 
   <ItemGroup>

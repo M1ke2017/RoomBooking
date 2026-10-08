@@ -5,7 +5,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.Services.AddRazorComponents();
+// Static server-side rendering everywhere, except the interactive developer page /live (a SignalR client per circuit).
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
 
 // EXTEXP0001: RemoveAllResilienceHandlers is marked experimental, but it is the documented way to opt one
 // client out of the default resilience pipeline. A retried 503 from /health would hide the real state.
@@ -34,7 +36,8 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 
-app.MapRazorComponents<App>();
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
 
 app.MapDefaultEndpoints();
 

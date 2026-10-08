@@ -1,5 +1,7 @@
 using CrewCall.Integrations;
+using CrewCall.Contracts.Live;
 using CrewCall.Integrations.Consumers;
+using CrewCall.Integrations.Live;
 using CrewCall.Integrations.Messaging;
 using CrewCall.Persistence;
 using CrewCall.Persistence.Messaging;
@@ -31,12 +33,25 @@ builder.Services.AddHostedService<OutboxPublisherWorker>();
 builder.Services.AddSingleton<IntegrationAuditHandler>();
 builder.Services.AddHostedService<IntegrationAuditConsumer>();
 
-// RabbitMQ.Client's own publish/receive activities in the Aspire traces.
-builder.Services.AddOpenTelemetry().WithTracing(tracing => tracing.AddSource("RabbitMQ.Client.*"));
+// Live operations (ADR-0015): RabbitMQ → live consumer → SignalR. The hub is a delivery channel, never a source of truth.
+builder.Services.AddSignalR();
+builder.Services.AddOptions<LiveOperationsOptions>().Bind(builder.Configuration.GetSection("LiveOperations"));
+builder.Services.AddScoped<ILiveRoutingLookup, DbLiveRoutingLookup>();
+builder.Services.AddSingleton<ILiveOperationsPublisher, SignalRLiveOperationsPublisher>();
+builder.Services.AddSingleton<LiveOperationsHandler>();
+builder.Services.AddHostedService<LiveOperationsConsumer>();
+
+// RabbitMQ.Client's own publish/receive activities, and SignalR's built-in hub activities, in the Aspire traces.
+builder.Services.AddOpenTelemetry().WithTracing(tracing => tracing
+    .AddSource("RabbitMQ.Client.*")
+    .AddSource("Microsoft.AspNetCore.SignalR.Server"));
 
 var app = builder.Build();
 
 app.MapGet("/", () => "CrewCall.Integrations");
+
+// Available whenever this process runs; it does not depend on the broker being up (no messages arrive while it is down).
+app.MapHub<LiveOperationsHub>(LiveOperationsHubContract.Path);
 
 if (app.Environment.IsDevelopment())
 {
