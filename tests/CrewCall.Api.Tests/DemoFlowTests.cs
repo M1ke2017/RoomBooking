@@ -40,9 +40,14 @@ public sealed class DemoFlowTests(CrewCallApiFactory factory)
             (inspection.VisitStartUtc, inspection.VisitEndUtc, inspection.TechnicianName, inspection.VehicleRegistrationNumber));
         Assert.Single(demo, item => item.AssignmentId is null);
 
-        // The morning's field work happened at its planned times, so the report has real numbers to show.
+        // The morning was replayed at its own times, in order (the reporting projections order by time), so the report
+        // has real numbers to show: the visit was planned before 07:15 and completed at 09:40.
         var morning = Assert.Single(demo, item => item.FieldWorkStatus == "Completed");
-        var completed = Assert.Single(await EventsAsync(client, "visit", morning.VisitId), e => e.EventType == "VisitWorkCompleted").Payload;
+        Assert.Equal("Completed", morning.VisitStatus);
+        var morningHistory = await EventsAsync(client, "visit", morning.VisitId);
+        Assert.Equal(morningHistory.Select(e => e.OccurredAtUtc).Order(), morningHistory.Select(e => e.OccurredAtUtc));
+        Assert.Equal((Local(7, 15), Local(9, 40)), (morningHistory[0].OccurredAtUtc, morningHistory[^1].OccurredAtUtc));
+        var completed = Assert.Single(morningHistory, e => e.EventType == "VisitWorkCompleted").Payload;
         Assert.Equal((25m, 85m, 15m, 70m),
             (completed.GetProperty("travelDurationMinutes").GetDecimal(), completed.GetProperty("grossWorkMinutes").GetDecimal(),
                 completed.GetProperty("pauseMinutes").GetDecimal(), completed.GetProperty("netWorkMinutes").GetDecimal()));

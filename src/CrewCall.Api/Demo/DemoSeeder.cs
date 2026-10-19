@@ -2,6 +2,8 @@ using CrewCall.Persistence;
 using CrewCall.Resources.Equipment;
 using CrewCall.Resources.Vehicles;
 using CrewCall.Scheduling.Assignments;
+using CrewCall.Scheduling.Checks;
+using CrewCall.Scheduling.Ports;
 using CrewCall.WorkOrders.Customers;
 using CrewCall.WorkOrders.Executions;
 using CrewCall.WorkOrders.Incidents;
@@ -42,9 +44,8 @@ public sealed class DemoSeeder(
     WorkingHoursService workingHours,
     VehicleService vehicles,
     EquipmentService equipment,
-    WorkOrderService workOrders,
-    VisitService visits,
-    AssignmentService assignments,
+    IVisitSchedulingSource visitSource,
+    SchedulingCheckService checks,
     IActiveAssignmentCheck activeAssignments,
     IncidentService incidents)
 {
@@ -108,28 +109,31 @@ public sealed class DemoSeeder(
 
         var anchor = Anchor(localNow);
 
+        // The morning already happened: its plan and field work are replayed at their own times (never later than now),
+        // so the history and the day's report show real travel, work and break times. Everything else is planned now.
+        DateTimeOffset Morning(double minutes) => Min(anchor.AddMinutes(minutes), now);
+
         // Done this morning: Jan installed air conditioning in Tychy (25 min travel, 85 min on site with a 15 min break).
-        var done = await VisitAsync(abc, tychy, "Instalacja klimatyzacji", "Normal", anchor.AddHours(-3), anchor.AddHours(-1.5), cancellationToken);
-        await AssignAsync(done, jan, transit, [], 0, cancellationToken);
-        await FieldWorkAsync(done, now, cancellationToken,
-            ("start-travel", anchor.AddMinutes(-205)), ("start-work", anchor.AddHours(-3)), ("pause", anchor.AddMinutes(-135)),
-            ("resume", anchor.AddHours(-2)), ("complete", anchor.AddMinutes(-95)));
+        var done = await VisitAsync(Morning(-240), abc, tychy, "Instalacja klimatyzacji", "Normal", anchor.AddHours(-3), anchor.AddHours(-1.5), cancellationToken);
+        await AssignAsync(Morning(-240), done, jan, transit, [], 0, cancellationToken);
+        await FieldWorkAsync(done, cancellationToken,
+            ("start-travel", Morning(-205)), ("start-work", Morning(-180)), ("pause", Morning(-135)), ("resume", Morning(-120)), ("complete", Morning(-95)));
 
         // In progress now: Anna lays fibre in Tychy (an active work order).
-        var fibre = await VisitAsync(abc, tychy, "Montaż światłowodu", "High", anchor.AddHours(-1), anchor.AddHours(3), cancellationToken);
-        await AssignAsync(fibre, anna, master, [meter], 0, cancellationToken);
-        await FieldWorkAsync(fibre, now, cancellationToken, ("start-travel", anchor.AddMinutes(-80)), ("start-work", anchor.AddHours(-1)));
+        var fibre = await VisitAsync(Morning(-240), abc, tychy, "Montaż światłowodu", "High", anchor.AddHours(-1), anchor.AddHours(3), cancellationToken);
+        await AssignAsync(Morning(-240), fibre, anna, master, [meter], 0, cancellationToken);
+        await FieldWorkAsync(fibre, cancellationToken, ("start-travel", Morning(-80)), ("start-work", Morning(-60)));
 
         // Planned: Jan's routine inspection in Katowice — the visit the urgent incident will need to move.
-        var inspection = await VisitAsync(abc, katowice, "Przegląd instalacji elektrycznej", "Normal", anchor.AddHours(1), anchor.AddHours(2.5), cancellationToken);
-        await AssignAsync(inspection, jan, transit, [], 30, cancellationToken);
+        var inspection = await VisitAsync(now, abc, katowice, "Przegląd instalacji elektrycznej", "Normal", anchor.AddHours(1), anchor.AddHours(2.5), cancellationToken);
+        await AssignAsync(now, inspection, jan, transit, [], 30, cancellationToken);
 
         // Planned: Piotr's air-conditioning service (he has no electrical skill).
-        var service = await VisitAsync(abc, tychy, "Serwis klimatyzacji", "Normal", anchor.AddHours(0.5), anchor.AddHours(2), cancellationToken);
-        await AssignAsync(service, piotr, null, [], 0, cancellationToken);
+        var service = await VisitAsync(now, abc, tychy, "Serwis klimatyzacji", "Normal", anchor.AddHours(0.5), anchor.AddHours(2), cancellationToken);
+        await AssignAsync(now, service, piotr, null, [], 0, cancellationToken);
 
         // Waiting for a technician.
-        await VisitAsync(abc, katowice, "Wymiana oświetlenia awaryjnego", "Low", anchor.AddHours(3), anchor.AddHours(4), cancellationToken);
+        await VisitAsync(now, abc, katowice, "Wymiana oświetlenia awaryjnego", "Low", anchor.AddHours(3), anchor.AddHours(4), cancellationToken);
 
         // The urgent incident: the hospital loses power while every electrician is busy.
         var incident = await incidents.CreateAsync(
@@ -202,32 +206,31 @@ public sealed class DemoSeeder(
             ? created.Equipment.Id
             : throw new InvalidOperationException($"Demo equipment {assetCode} could not be created."));
 
-    /// <summary>A work order of the priority at the site, with one visit over [start, end).</summary>
+    /// <summary>A work order of the priority at the site, with one visit over [start, end), created at <paramref name="at"/>.</summary>
     private async Task<Guid> VisitAsync(
-        Guid customerId, Guid siteId, string title, string priority, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken)
+        DateTimeOffset at, Guid customerId, Guid siteId, string title, string priority, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken)
     {
-        var workOrder = await workOrders.CreateAsync(new CreateWorkOrder(customerId, siteId, title, null, priority), cancellationToken);
+        var clock = new FixedClock(at);
+        var workOrder = await new WorkOrderService(db, clock).CreateAsync(new CreateWorkOrder(customerId, siteId, title, null, priority), cancellationToken);
         var workOrderId = (workOrder as CreateWorkOrderOutcome.Created ?? throw Unexpected("work order", workOrder)).WorkOrder.Id;
-        var visit = await visits.CreateAsync(new CreateVisit(workOrderId, start, end, null), cancellationToken);
+        var visit = await new VisitService(db, clock).CreateAsync(new CreateVisit(workOrderId, start, end, null), cancellationToken);
         return (visit as CreateVisitOutcome.Created ?? throw Unexpected("visit", visit)).Visit.Id;
     }
 
-    private async Task AssignAsync(Guid visitId, Guid technicianId, Guid? vehicleId, Guid[] equipmentIds, int travelBefore, CancellationToken cancellationToken)
+    private async Task AssignAsync(
+        DateTimeOffset at, Guid visitId, Guid technicianId, Guid? vehicleId, Guid[] equipmentIds, int travelBefore, CancellationToken cancellationToken)
     {
-        var outcome = await assignments.CreateAsync(
+        var outcome = await new AssignmentService(db, visitSource, checks, new FixedClock(at)).CreateAsync(
             new CreateAssignment(visitId, technicianId, vehicleId, equipmentIds, null, travelBefore, 0), cancellationToken);
         _ = outcome as AssignOutcome.Assigned ?? throw Unexpected("assignment", outcome);
     }
 
-    /// <summary>
-    /// Replays the technician's field work at the planned moments (never later than now), so the history and the day's
-    /// report show real travel, work and pause times instead of zeros.
-    /// </summary>
-    private async Task FieldWorkAsync(Guid visitId, DateTimeOffset now, CancellationToken cancellationToken, params (string Step, DateTimeOffset At)[] steps)
+    /// <summary>The technician's field work, each step at its own moment.</summary>
+    private async Task FieldWorkAsync(Guid visitId, CancellationToken cancellationToken, params (string Step, DateTimeOffset At)[] steps)
     {
         foreach (var (step, at) in steps)
         {
-            var executions = new VisitExecutionService(db, activeAssignments, new FixedClock(at < now ? at : now));
+            var executions = new VisitExecutionService(db, activeAssignments, new FixedClock(at));
             var outcome = step switch
             {
                 "start-travel" => await executions.StartTravelAsync(visitId, cancellationToken),
@@ -240,6 +243,9 @@ public sealed class DemoSeeder(
         }
     }
 
+    private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a < b ? a : b;
+
+    /// <summary>The seed's own clock: a write at a chosen moment of the demo day.</summary>
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
