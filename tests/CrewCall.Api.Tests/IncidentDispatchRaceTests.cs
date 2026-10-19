@@ -172,11 +172,12 @@ public sealed class IncidentDispatchRaceTests(CrewCallApiFactory factory)
             Cancellation);
     }
 
+    /// <summary>The aggregate's outbox messages, apart from the incident's own creation (incident.created).</summary>
     private async Task<int> OutboxCountAsync(Guid aggregateId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().OutboxMessages
-            .CountAsync(message => message.AggregateId == aggregateId, Cancellation);
+            .CountAsync(message => message.AggregateId == aggregateId && message.Type != "incident.created", Cancellation);
     }
 
     private async Task<int> OutboxAssignmentsCreatedAsync(Guid technicianId)

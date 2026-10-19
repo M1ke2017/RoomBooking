@@ -79,7 +79,7 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
 
         var result = await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation);
 
-        Assert.Equal(new Integrations.OutboxBatchResult(4, 4, 0), result); // the visit's four messages
+        Assert.Equal(new Integrations.OutboxBatchResult(5, 5, 0), result); // the visit's five messages
         var outbox = await OutboxForVisitAsync(services, visitId);
         Assert.NotNull(outbox.ProcessedAtUtc); // only after the broker's confirmation
         await observer.ExchangeDeclarePassiveAsync("crewcall.events", Cancellation); // the topic exchange exists
@@ -165,7 +165,7 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
         await using (var downPublisher = new RabbitMqMessagePublisher(unreachable, Options.Create(new OutboxPublisherOptions())))
         {
             var attempt = await MessagingInfrastructure.Processor(services, downPublisher, clock).ProcessBatchAsync(Cancellation);
-            Assert.Equal(new Integrations.OutboxBatchResult(4, 0, 1), attempt);
+            Assert.Equal(new Integrations.OutboxBatchResult(5, 0, 1), attempt);
         }
 
         var waiting = await OutboxForVisitAsync(services, visitId, "visit.created");
@@ -179,7 +179,7 @@ public sealed class RabbitMqPipelineTests(MessagingInfrastructure infrastructure
         var (observer, queue) = await ObserveAsync(broker, "visit.created");
         clock.Advance(TimeSpan.FromSeconds(3));
 
-        Assert.Equal(new Integrations.OutboxBatchResult(4, 4, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
+        Assert.Equal(new Integrations.OutboxBatchResult(5, 5, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
         Assert.Equal(pending.Id.ToString(), (await NextAsync(observer, queue)).BasicProperties.MessageId);
         Assert.Equal(2, (await OutboxForVisitAsync(services, visitId, "visit.created")).AttemptCount);
         await observer.DisposeAsync();

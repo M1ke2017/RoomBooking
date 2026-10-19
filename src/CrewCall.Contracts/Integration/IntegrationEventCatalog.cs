@@ -24,11 +24,13 @@ public static class IntegrationEventCatalog
     public static readonly IntegrationEventDescriptor VisitCreated = new("visit.created", 1, "visit.created");
     public static readonly IntegrationEventDescriptor VisitStatusChanged = new("visit.status-changed", 1, "visit.status.changed");
     public static readonly IntegrationEventDescriptor VisitRescheduled = new("visit.rescheduled", 1, "visit.rescheduled");
+    public static readonly IntegrationEventDescriptor IncidentCreated = new("incident.created", 1, "incident.created");
+    public static readonly IntegrationEventDescriptor VisitFieldWorkChanged = new("visit.field-work-changed", 1, "visit.field-work.changed");
 
     public static IReadOnlyList<IntegrationEventDescriptor> All { get; } =
     [
         AssignmentCreated, AssignmentReplaced, AssignmentCancelled, IncidentDispatched, VisitWorkCompleted, VisitCreated, VisitStatusChanged,
-        VisitRescheduled
+        VisitRescheduled, IncidentCreated, VisitFieldWorkChanged
     ];
 
     /// <summary>JSON for payloads and envelopes: camelCase, enums as strings.</summary>
@@ -47,6 +49,8 @@ public static class IntegrationEventCatalog
         VisitCreatedIntegrationEvent => VisitCreated,
         VisitStatusChangedIntegrationEvent => VisitStatusChanged,
         VisitRescheduledIntegrationEvent => VisitRescheduled,
+        IncidentCreatedIntegrationEvent => IncidentCreated,
+        VisitFieldWorkChangedIntegrationEvent => VisitFieldWorkChanged,
         _ => throw new ArgumentException($"{integrationEvent.GetType().Name} is not a published integration event.", nameof(integrationEvent))
     };
 

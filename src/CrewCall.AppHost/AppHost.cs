@@ -19,6 +19,8 @@ var rabbitMq = builder.AddRabbitMQ("crewcall-rabbitmq")
 var api = builder.AddProject<Projects.CrewCall_Api>("crewcall-api")
     .WithReference(database)
     .WaitFor(database)
+    // Portfolio demo: a planned day with an urgent incident, created once per day (idempotent). Local runs only.
+    .WithEnvironment("Demo__Seed", "true")
     .WithHttpHealthCheck("/health");
 
 // Publishes the outbox, runs the integration-audit and live-operations consumers, and hosts the live operations SignalR
@@ -32,19 +34,20 @@ var integrations = builder.AddProject<Projects.CrewCall_Integrations>("crewcall-
 
 // Event-driven reporting projections and the read-only Reporting API (ADR-0016). It references only its own database
 // and the broker: never the operational database, never the API.
-builder.AddProject<Projects.CrewCall_Reporting>("crewcall-reporting-service")
+var reporting = builder.AddProject<Projects.CrewCall_Reporting>("crewcall-reporting-service")
     .WithReference(reportingDatabase)
     .WithReference(rabbitMq)
     .WaitFor(reportingDatabase)
     .WaitFor(rabbitMq)
     .WithHttpHealthCheck("/health");
 
-// The Web finds the API and the live operations hub through service discovery. It waits only for the API: without the
-// broker or the Integrations service it still runs, it just receives no live updates.
+// The Web finds the API, the live operations hub and the reporting API through service discovery. It waits only for the
+// API: without the broker, Integrations or Reporting it still runs, it just receives no live updates or day numbers.
 builder.AddProject<Projects.CrewCall_Web>("crewcall-web")
     .WithExternalHttpEndpoints()
     .WithReference(api)
     .WithReference(integrations)
+    .WithReference(reporting)
     .WaitFor(api)
     .WithHttpHealthCheck("/health");
 

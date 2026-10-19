@@ -101,20 +101,25 @@ public sealed class OutboxAtomicityTests(CrewCallApiFactory factory)
         await PostAsync<VisitExecutionResponse>(client, $"/api/visits/{dispatched.VisitId}/execution/start-work", null);
         var completed = await PostAsync<VisitExecutionResponse>(client, $"/api/visits/{dispatched.VisitId}/execution/complete", null);
 
-        var incidentMessage = Assert.Single(await OutboxForAsync(incident.Id));
+        // The incident's creation and its dispatch are published (Sprint 16 added incident.created); analysis stays internal.
+        var incidentMessages = await OutboxForAsync(incident.Id);
+        Assert.Equal(["incident.created", "incident.dispatched"], incidentMessages.Select(m => m.Type).Order());
+        var incidentMessage = Assert.Single(incidentMessages, m => m.Type == "incident.dispatched");
         Assert.Equal(("incident.dispatched", 1, "incident.dispatched"), (incidentMessage.Type, incidentMessage.Version, incidentMessage.RoutingKey));
+        var createdIncident = Payload(Assert.Single(incidentMessages, m => m.Type == "incident.created"));
+        Assert.Equal((incident.Id, "Urgent"), (createdIncident.GetProperty("incidentId").GetGuid(), createdIncident.GetProperty("priority").GetString()));
         var incidentPayload = Payload(incidentMessage);
         Assert.Equal((incident.Id, dispatched.WorkOrderId, dispatched.VisitId, dispatched.Assignment.AssignmentId, technician),
             (incidentPayload.GetProperty("incidentId").GetGuid(), incidentPayload.GetProperty("workOrderId").GetGuid(), incidentPayload.GetProperty("visitId").GetGuid(),
              incidentPayload.GetProperty("assignmentId").GetGuid(), incidentPayload.GetProperty("technicianId").GetGuid()));
         Assert.Single(await OutboxForAsync(dispatched.Assignment.AssignmentId), m => m.Type == "assignment.created");
 
-        // The visit's history has more operational events (work started, pauses...); only its creation, its status
-        // changes and the completion are published (Sprint 14).
+        // The visit's creation, its status changes, each field work step (Sprint 16) and the completion are published.
         var visitMessages = await OutboxForAsync(dispatched.VisitId);
         Assert.Equal(
-            ["visit.created", "visit.status-changed", "visit.status-changed", "visit.work-completed"],
+            ["visit.created", "visit.field-work-changed", "visit.status-changed", "visit.status-changed", "visit.work-completed"],
             visitMessages.Select(m => m.Type).Order());
+        Assert.Equal("Working", Payload(Assert.Single(visitMessages, m => m.Type == "visit.field-work-changed")).GetProperty("fieldWorkStatus").GetString());
         var created = Payload(Assert.Single(visitMessages, m => m.Type == "visit.created"));
         Assert.Equal((dispatched.VisitId, dispatched.WorkOrderId, incident.SiteId),
             (created.GetProperty("visitId").GetGuid(), created.GetProperty("workOrderId").GetGuid(), created.GetProperty("siteId").GetGuid()));

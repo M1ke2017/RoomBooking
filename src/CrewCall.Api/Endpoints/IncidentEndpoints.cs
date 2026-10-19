@@ -240,7 +240,7 @@ internal static class IncidentEndpoints
     private static ProblemHttpResult ConcurrentChange(Guid id) =>
         ApiProblems.Conflict("Concurrent change", $"Incident '{id}' was changed by another request. Reload and retry.");
 
-    private static IncidentResponse ToResponse(this Incident incident) =>
+    internal static IncidentResponse ToResponse(this Incident incident) =>
         new(
             incident.Id,
             incident.CustomerId,

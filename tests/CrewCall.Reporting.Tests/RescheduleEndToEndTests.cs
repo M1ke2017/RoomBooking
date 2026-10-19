@@ -134,6 +134,56 @@ public sealed class RescheduleEndToEndTests(ReportingInfrastructure infrastructu
         Assert.Equal(0, visits.Visits.Single(v => v.VisitId == x.Visit).RescheduleCount);
     }
 
+    [Fact]
+    public async Task The_portfolio_demo_runs_from_the_seeded_day_to_the_report_without_creating_anything_by_hand()
+    {
+        await using var reportingHost = ReportingHosts.Reporting(infrastructure, _reportingQueue);
+        using var reporting = reportingHost.CreateClient();
+        await using var apiHost = new WebApplicationFactory<api::Program>().WithWebHostBuilder(builder => builder
+            .UseSetting("ConnectionStrings:crewcall", infrastructure.OperationalConnectionString)
+            .UseSetting("Demo:Seed", "true"));
+        using var api = apiHost.CreateClient(); // migrates, then seeds today's demo plan
+        await using var integrationsHost = new WebApplicationFactory<integrations::Program>().WithWebHostBuilder(builder => builder
+            .UseSetting("ConnectionStrings:crewcall", infrastructure.OperationalConnectionString)
+            .UseSetting("ConnectionStrings:crewcall-rabbitmq", infrastructure.BrokerConnectionString)
+            .UseSetting("Outbox:PollInterval", "00:00:00.200")
+            .UseSetting("LiveOperations:QueueName", _liveQueue)
+            .UseSetting("LiveOperations:ReconnectDelay", "00:00:00.200"));
+        _ = integrationsHost.Server;
+        await using var live = await LiveClient.ConnectAsync(integrationsHost);
+        await live.Connection.InvokeAsync(LiveOperationsHubContract.SubscribeAll, Cancellation);
+
+        // The manager's board: the day's plan and the urgent incident (exactly what /operations shows).
+        var board = (await api.GetFromJsonAsync<OperationsBoardResponse>("/api/operations/board", Cancellation))!;
+        var incident = Assert.Single(board.Incidents, entry => entry.Incident.Title == "Awaria zasilania — sala zabiegowa").Incident;
+        var inspection = Assert.Single(board.Today, item => item.WorkOrderTitle == "Przegląd instalacji elektrycznej");
+
+        // Analyze → proposal → accept, each one click on the screen.
+        (await api.PostAsJsonAsync($"/api/incidents/{incident.Id}/analyze", (object?)null, Cancellation)).EnsureSuccessStatusCode();
+        var proposal = (await PostAsync<RescheduleProposal[]>(api, $"/api/incidents/{incident.Id}/reschedule-proposal", new { }))[0];
+        Assert.Equal(("Jan Kowalski", (Guid?)inspection.VisitId), (proposal.TechnicianName, proposal.ConflictingVisitId));
+        using var accepted = await api.PostAsJsonAsync($"/api/incidents/{incident.Id}/reschedule-proposal/apply",
+            new ApplyRescheduleRequest(proposal.RecommendedTechnicianId, proposal.VehicleId, proposal.EquipmentIds,
+                proposal.TravelBufferBeforeMinutes, proposal.TravelBufferAfterMinutes,
+                proposal.ConflictingVisitId, proposal.ProposedNewStartUtc, proposal.ProposedNewEndUtc),
+            Cancellation);
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        // The board shows the change and its reason; the live client is told; the report counts it.
+        board = (await api.GetFromJsonAsync<OperationsBoardResponse>("/api/operations/board", Cancellation))!;
+        var moved = Assert.Single(board.Today, item => item.VisitId == inspection.VisitId);
+        Assert.Equal((proposal.ProposedNewStartUtc, "UrgentIncident"), ((DateTimeOffset?)moved.VisitStartUtc, moved.LastReschedule!.Reason));
+        Assert.Equal("Dispatched", Assert.Single(board.Incidents, entry => entry.Incident.Id == incident.Id).Incident.Status);
+
+        var message = await live.NextAsync(m => m.Type == LiveOperationTypes.VisitRescheduled && m.EntityId == inspection.VisitId);
+        Assert.Equal(await OutboxIdAsync(apiHost, inspection.VisitId), message.MessageId);
+
+        var report = await Wait.UntilAsync(
+            async () => (await reporting.GetFromJsonAsync<VisitActivityReport>("/api/reporting/visits", Cancellation))!,
+            r => r.Visits.Any(v => v.VisitId == inspection.VisitId && v.RescheduleCount == 1), "the rescheduled demo visit", TimeSpan.FromSeconds(60));
+        Assert.Equal(proposal.Impact.DelayMinutes, report.Visits.Single(v => v.VisitId == inspection.VisitId).TotalDelayMinutes);
+    }
+
     private async Task<(Guid Visit, Guid Assignment)> PlannedVisitAsync(
         HttpClient api, Guid technician, DateTimeOffset start, DateTimeOffset end, int travelBefore)
     {

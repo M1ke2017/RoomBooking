@@ -73,7 +73,9 @@ Consumer Effect         (ops.integration_event_receipts)
 
 `IntegrationEventMapper` is the explicit table from operational to integration events: a `switch` on the event type and
 payload, with no reflection (a static class since Sprint 15, ADR-0017 §11). Sprint 12 published only these five events;
-Sprint 14 added `visit.created` and `visit.status-changed` (ADR-0016), and Sprint 15 `visit.rescheduled` (ADR-0017):
+Sprint 14 added `visit.created` and `visit.status-changed` (ADR-0016), Sprint 15 `visit.rescheduled` (ADR-0017), and
+Sprint 16 `incident.created` and `visit.field-work-changed` (travel, work, pause, resume and cancel of field work; the
+live manager screen needs them):
 
 | Type (v1) | Routing key |
 |---|---|

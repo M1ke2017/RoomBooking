@@ -41,6 +41,12 @@ public sealed class IntegrationContractTests
         { new VisitRescheduledIntegrationEvent(Guid.NewGuid(), At, null, Guid.NewGuid(), At.AddHours(1), At.AddHours(2), At.AddHours(4), At.AddHours(5), "UrgentIncident", Guid.NewGuid()),
           "visit.rescheduled", "visit.rescheduled",
           ["eventId", "occurredAtUtc", "correlationId", "visitId", "oldStartUtc", "oldEndUtc", "newStartUtc", "newEndUtc", "reason", "incidentId"] },
+        { new IncidentCreatedIntegrationEvent(Guid.NewGuid(), At, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Critical", At.AddHours(1), At.AddHours(2)),
+          "incident.created", "incident.created",
+          ["eventId", "occurredAtUtc", "correlationId", "incidentId", "customerId", "siteId", "priority", "requestedStartUtc", "requestedEndUtc"] },
+        { new VisitFieldWorkChangedIntegrationEvent(Guid.NewGuid(), At, null, Guid.NewGuid(), Guid.NewGuid(), "Traveling"),
+          "visit.field-work-changed", "visit.field-work.changed",
+          ["eventId", "occurredAtUtc", "correlationId", "visitId", "executionId", "fieldWorkStatus"] },
     };
 
     [Theory]
@@ -64,7 +70,10 @@ public sealed class IntegrationContractTests
     public void The_catalog_lists_exactly_the_published_events_with_unique_types()
     {
         Assert.Equal(
-            ["assignment.cancelled", "assignment.created", "assignment.replaced", "incident.dispatched", "visit.created", "visit.rescheduled", "visit.status-changed", "visit.work-completed"],
+            [
+                "assignment.cancelled", "assignment.created", "assignment.replaced", "incident.created", "incident.dispatched", "visit.created",
+                "visit.field-work-changed", "visit.rescheduled", "visit.status-changed", "visit.work-completed"
+            ],
             IntegrationEventCatalog.All.Select(descriptor => descriptor.Type).Order());
         Assert.All(IntegrationEventCatalog.All, descriptor => Assert.Equal(1, descriptor.Version));
         Assert.Equal(IntegrationEventCatalog.All.Count, IntegrationEventCatalog.All.Select(d => d.RoutingKey).Distinct().Count());
@@ -167,11 +176,34 @@ public sealed class IntegrationEventMapperTests
     }
 
     [Fact]
+    public void A_new_incident_and_each_field_work_step_are_published_for_the_live_screen()
+    {
+        var incident = new IncidentCreatedPayload(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), WorkOrders.Incidents.IncidentPriority.Critical, At, At.AddHours(1), ["ELECTRICAL"]);
+        var created = Assert.IsType<IncidentCreatedIntegrationEvent>(IntegrationEventMapper.Map(IncidentEvents.IncidentCreated, At, incident, null));
+        Assert.Equal((incident.IncidentId, incident.SiteId, "Critical", At, At.AddHours(1)),
+            (created.IncidentId, created.SiteId, created.Priority, created.RequestedStartUtc, created.RequestedEndUtc));
+
+        var (visitId, executionId) = (Guid.NewGuid(), Guid.NewGuid());
+        IIntegrationEvent?[] steps =
+        [
+            IntegrationEventMapper.Map(VisitExecutionEvents.VisitTravelStarted, At, new VisitTravelStartedPayload(visitId, executionId, At), null),
+            IntegrationEventMapper.Map(VisitExecutionEvents.VisitWorkStarted, At, new VisitWorkStartedPayload(visitId, executionId, At, 20m), null),
+            IntegrationEventMapper.Map(VisitExecutionEvents.VisitWorkPaused, At, new VisitWorkPausedPayload(visitId, executionId, Guid.NewGuid(), At), null),
+            IntegrationEventMapper.Map(VisitExecutionEvents.VisitWorkResumed, At, new VisitWorkResumedPayload(visitId, executionId, Guid.NewGuid(), At, 5m), null),
+            IntegrationEventMapper.Map(VisitExecutionEvents.VisitExecutionCancelled, At,
+                new VisitExecutionCancelledPayload(visitId, executionId, At, WorkOrders.Executions.FieldWorkStatus.Working, null), null)
+        ];
+        Assert.Equal(["Traveling", "Working", "Paused", "Working", "Cancelled"],
+            steps.Select(step => Assert.IsType<VisitFieldWorkChangedIntegrationEvent>(step)).Select(step => step.FieldWorkStatus));
+        Assert.All(steps.Cast<VisitFieldWorkChangedIntegrationEvent>(), step => Assert.Equal((visitId, executionId), (step.VisitId, step.ExecutionId)));
+    }
+
+    [Fact]
     public void Internal_operational_events_are_not_published()
     {
         Assert.Null(IntegrationEventMapper.Map(WorkOrderEvents.WorkOrderCreated, At, new WorkOrderCreatedPayload(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), WorkOrderPriority.Normal), null));
-        Assert.Null(IntegrationEventMapper.Map(VisitExecutionEvents.VisitWorkStarted, At, new VisitWorkStartedPayload(Guid.NewGuid(), Guid.NewGuid(), At, null), null));
-        Assert.Null(IntegrationEventMapper.Map(IncidentEvents.IncidentCreated, At, new object(), null));
+        Assert.Null(IntegrationEventMapper.Map(IncidentEvents.IncidentAnalyzed, At, new object(), null));
+        Assert.Null(IntegrationEventMapper.Map(IncidentEvents.IncidentCreated, At, new object(), null)); // wrong payload shape
 
         // A known type with a payload of the wrong shape is not guessed at.
         Assert.Null(IntegrationEventMapper.Map(AssignmentEvents.AssignmentCreated, At, new AssignmentCancelledPayload(Guid.NewGuid(), Guid.NewGuid()), null));

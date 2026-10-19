@@ -1,5 +1,7 @@
 using CrewCall.Api;
+using CrewCall.Api.Demo;
 using CrewCall.Api.Endpoints;
+using CrewCall.Api.Operations;
 using CrewCall.Api.SchedulingAdapters;
 using CrewCall.Api.WorkOrdersAdapters;
 using CrewCall.Persistence;
@@ -34,6 +36,8 @@ builder.Services.AddResourcesModule();
 builder.Services.AddSchedulingModule();
 builder.Services.AddSchedulingAdapters();
 builder.Services.AddWorkOrdersAdapters();
+builder.Services.AddScoped<OperationsBoardService>();
+builder.Services.AddScoped<DemoSeeder>();
 
 var app = builder.Build();
 
@@ -47,6 +51,14 @@ if (app.Environment.IsDevelopment())
     // Development only: apply migrations on startup. A dedicated migration step replaces this before any shared environment.
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<CrewCallDbContext>().Database.MigrateAsync();
+}
+
+// Portfolio demo (Demo:Seed, enabled by the AppHost): today's demo plan, created once per day, idempotent.
+if (app.Configuration.GetValue<bool>(DemoEndpoints.SeedSetting))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var demo = await scope.ServiceProvider.GetRequiredService<DemoSeeder>().SeedAsync(CancellationToken.None);
+    app.Logger.LogInformation("Demo data ready for {Day} (new day plan: {Created}).", demo.Day, demo.CreatedDayPlan);
 }
 
 app.MapGet("/", () => "CrewCall.Api");
@@ -70,6 +82,7 @@ app.MapAssignmentEndpoints();
 app.MapOperationalCalendarEndpoints();
 app.MapIncidentEndpoints();
 app.MapVisitExecutionEndpoints();
+app.MapDemoEndpoints();
 
 app.MapDefaultEndpoints();
 

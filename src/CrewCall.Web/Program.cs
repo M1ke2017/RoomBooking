@@ -1,11 +1,13 @@
 using CrewCall.Web.Components;
+using CrewCall.Web.Operations;
 using CrewCall.Web.Status;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// Static server-side rendering everywhere, except the interactive developer page /live (a SignalR client per circuit).
+// Interactive server rendering for the manager screen (/operations) and the developer page /live: each circuit holds a
+// SignalR client to the live operations hub. The status page stays static.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -21,6 +23,14 @@ builder.Services.AddHttpClient<SystemStatusClient>(client =>
     // A status probe must report the current state, so it does not retry.
     .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001
+
+// The manager screen talks to the API and, for the day's numbers, to the reporting service (both by service discovery).
+builder.Services.AddHttpClient<OperationsApiClient>(client => client.BaseAddress = new("https+http://crewcall-api"));
+builder.Services.AddHttpClient<ReportingApiClient>(client =>
+{
+    client.BaseAddress = new("https+http://crewcall-reporting-service");
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 
 var app = builder.Build();
 

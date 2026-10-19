@@ -71,3 +71,13 @@ none should take on a dependency on the others to do so (ADR-0001).
 - **Extraction to Reporting.** The service is self-contained: one class, its query and its DTOs. It can move to a
   future Reporting context, with its own projection tables fed by operational events, without changing the API
   contract.
+
+## Amendment (Sprint 16)
+
+- The calendar service builds the API contract (`OperationalCalendarResponse`) directly. The read-model copy
+  (`OperationalCalendar`, `OperationalCalendarItem`) and its 1:1 mapping in the endpoint were removed (ADR-0017 §11).
+- Each item carries `LastReschedule`: the visit's latest `VisitRescheduled` event (old and new window, reason, incident,
+  when, delay). The calendar and the manager screen can show why a visit is where it is. This costs one extra query for
+  the returned visits; the query count stays constant in the number of visits.
+- The manager's operations board (`GET /api/operations/board`) reuses the calendar items unchanged for its "today"
+  list, so the board and the calendar cannot disagree.

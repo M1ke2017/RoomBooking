@@ -182,6 +182,18 @@ public sealed class LiveHubClient : IAsyncDisposable
         }
     }
 
+    /// <summary>The next message of this type; earlier messages of other types are skipped.</summary>
+    public async Task<LiveOperationMessage> NextOfTypeAsync(string type)
+    {
+        while (true)
+        {
+            if ((await NextAsync()) is { } message && message.Type == type)
+            {
+                return message;
+            }
+        }
+    }
+
     /// <summary>
     /// Asserts that the next message this client receives is <paramref name="sentinel"/>: SignalR keeps the order per
     /// connection, so anything sent to this client before the sentinel would arrive first.

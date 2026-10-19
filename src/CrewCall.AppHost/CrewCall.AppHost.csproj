@@ -11,6 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="Aspire.Hosting.RabbitMQ" />
+    <!-- Security pin of a transitive dependency (see Directory.Packages.props). -->
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <ItemGroup>
