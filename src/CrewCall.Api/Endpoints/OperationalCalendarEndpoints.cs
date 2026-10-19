@@ -41,58 +41,11 @@ internal static class OperationalCalendarEndpoints
 
         return outcome switch
         {
-            OperationalCalendarOutcome.Listed listed => TypedResults.Ok(listed.Calendar.ToResponse()),
+            OperationalCalendarOutcome.Listed listed => TypedResults.Ok(listed.Calendar),
             OperationalCalendarOutcome.Invalid invalid => TypedResults.ValidationProblem(invalid.Errors),
             OperationalCalendarOutcome.PerspectiveNotFound notFound => ApiProblems.NotFound(
                 $"{notFound.Perspective} not found", $"{notFound.Perspective} '{notFound.PerspectiveId}' does not exist."),
             _ => throw new InvalidOperationException($"Unhandled outcome {outcome.GetType().Name}.")
         };
     }
-
-    private static OperationalCalendarResponse ToResponse(this OperationalCalendar calendar) =>
-        new(
-            calendar.RangeStartUtc,
-            calendar.RangeEndUtc,
-            calendar.RangeLocalStart,
-            calendar.RangeLocalEnd,
-            calendar.TimeZoneId,
-            calendar.Perspective.ToString(),
-            calendar.PerspectiveId,
-            calendar.Items.Count,
-            calendar.Items.Select(item => new OperationalCalendarItemResponse(
-                item.VisitId,
-                item.VisitStartUtc,
-                item.VisitEndUtc,
-                item.VisitLocalStart,
-                item.VisitLocalEnd,
-                item.VisitStatus.ToString(),
-                item.WorkOrderId,
-                item.WorkOrderTitle,
-                item.WorkOrderPriority.ToString(),
-                item.WorkOrderStatus.ToString(),
-                item.CustomerId,
-                item.CustomerName,
-                item.SiteId,
-                item.SiteName,
-                item.SiteCity,
-                item.AssignmentId,
-                item.AssignmentStatus?.ToString(),
-                item.TechnicianId,
-                item.TechnicianName,
-                item.TeamId,
-                item.TeamName,
-                item.VehicleId,
-                item.VehicleName,
-                item.VehicleRegistrationNumber,
-                item.TravelBufferBeforeMinutes,
-                item.TravelBufferAfterMinutes,
-                item.Equipment.Select(asset => new OperationalCalendarEquipmentResponse(asset.EquipmentId, asset.Name, asset.AssetCode)).ToArray(),
-                item.FieldWorkStatus.ToString(),
-                item.TravelStartedAtUtc,
-                item.WorkStartedAtUtc,
-                item.CompletedAtUtc,
-                item.ActualTravelMinutes,
-                item.ActualWorkMinutes,
-                item.PauseMinutes))
-                .ToArray());
 }

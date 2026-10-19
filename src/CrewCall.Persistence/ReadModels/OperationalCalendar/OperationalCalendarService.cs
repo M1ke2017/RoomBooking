@@ -1,5 +1,8 @@
+using System.Text.Json;
+using CrewCall.Contracts.OperationalCalendar;
 using CrewCall.Scheduling.Assignments;
 using CrewCall.WorkOrders.Executions;
+using CrewCall.WorkOrders.Operations;
 using Microsoft.EntityFrameworkCore;
 using NodaTime;
 
@@ -16,8 +19,9 @@ namespace CrewCall.Persistence.ReadModels.OperationalCalendar;
 /// 2. one query for the visits overlapping the range, joined 1:1 with work order, customer and site, and left-joined
 ///    with the active assignment (at most one per visit), its technician, that technician's team and the vehicle;
 /// 3. one query for the equipment of the returned assignments (1:N, kept separate so the main query cannot multiply rows);
-/// 4. only when some returned visit has field work recorded: one query for those executions' pauses (1:N, likewise).
-/// The visit's execution (at most one per visit) is left-joined in query 2.
+/// 4. only when some returned visit has field work recorded: one query for those executions' pauses (1:N, likewise);
+/// 5. only when visits were returned: one query for their VisitRescheduled history, the latest move per visit.
+/// The visit's execution (at most one per visit) is left-joined in query 2. The result is the API contract itself.
 /// </remarks>
 public sealed class OperationalCalendarService(CrewCallDbContext db)
 {
@@ -92,26 +96,28 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
         var equipment = await LoadEquipmentAsync(rows, cancellationToken);
         var pauses = await LoadPausesAsync(rows, cancellationToken);
 
+        var reschedules = await LoadLastReschedulesAsync(rows, cancellationToken);
+
         var items = rows
             .Select(row => (row, metrics: Metrics(row, pauses)))
-            .Select(entry => new OperationalCalendarItem(
+            .Select(entry => new OperationalCalendarItemResponse(
                 entry.row.VisitId,
                 entry.row.VisitStart,
                 entry.row.VisitEnd,
                 Local(entry.row.VisitStart, zone!),
                 Local(entry.row.VisitEnd, zone!),
-                entry.row.VisitStatus,
+                entry.row.VisitStatus.ToString(),
                 entry.row.WorkOrderId,
                 entry.row.WorkOrderTitle,
-                entry.row.WorkOrderPriority,
-                entry.row.WorkOrderStatus,
+                entry.row.WorkOrderPriority.ToString(),
+                entry.row.WorkOrderStatus.ToString(),
                 entry.row.CustomerId,
                 entry.row.CustomerName,
                 entry.row.SiteId,
                 entry.row.SiteName,
                 entry.row.SiteCity,
                 entry.row.AssignmentId,
-                entry.row.AssignmentStatus,
+                entry.row.AssignmentStatus?.ToString(),
                 entry.row.TechnicianId,
                 entry.row.TechnicianName,
                 entry.row.TeamId,
@@ -122,17 +128,19 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
                 entry.row.TravelBufferBeforeMinutes,
                 entry.row.TravelBufferAfterMinutes,
                 entry.row.AssignmentId is { } assignmentId && equipment.TryGetValue(assignmentId, out var assets) ? assets : [],
-                entry.row.FieldWorkStatus ?? FieldWorkStatus.NotStarted,
+                (entry.row.FieldWorkStatus ?? FieldWorkStatus.NotStarted).ToString(),
                 entry.row.TravelStartedAtUtc,
                 entry.row.WorkStartedAtUtc,
                 entry.row.CompletedAtUtc,
                 VisitExecutionMetrics.Minutes(entry.metrics?.Travel),
                 VisitExecutionMetrics.Minutes(entry.metrics?.NetWork),
-                entry.metrics is { } metrics ? VisitExecutionMetrics.Minutes(metrics.Pause) : null))
-            .ToList();
+                entry.metrics is { } metrics ? VisitExecutionMetrics.Minutes(metrics.Pause) : null,
+                reschedules.GetValueOrDefault(entry.row.VisitId)))
+            .ToArray();
 
-        return new OperationalCalendarOutcome.Listed(new OperationalCalendar(
-            start.Value, end.Value, Local(start.Value, zone!), Local(end.Value, zone!), zone!.Id, perspective, perspectiveId, items));
+        return new OperationalCalendarOutcome.Listed(new OperationalCalendarResponse(
+            start.Value, end.Value, Local(start.Value, zone!), Local(end.Value, zone!), zone!.Id, perspective.ToString(), perspectiveId,
+            items.Length, items));
     }
 
     private sealed record VisitRow(
@@ -238,7 +246,7 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<Dictionary<Guid, IReadOnlyList<OperationalCalendarEquipmentItem>>> LoadEquipmentAsync(
+    private async Task<Dictionary<Guid, OperationalCalendarEquipmentResponse[]>> LoadEquipmentAsync(
         IReadOnlyCollection<VisitRow> rows, CancellationToken cancellationToken)
     {
         var assignmentIds = rows.Where(row => row.AssignmentId is not null).Select(row => row.AssignmentId!.Value).ToList();
@@ -259,9 +267,9 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
             .GroupBy(asset => asset.AssignmentId)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<OperationalCalendarEquipmentItem>)group
-                    .Select(asset => new OperationalCalendarEquipmentItem(asset.Id, asset.Name, asset.AssetCode))
-                    .ToList());
+                group => group
+                    .Select(asset => new OperationalCalendarEquipmentResponse(asset.Id, asset.Name, asset.AssetCode))
+                    .ToArray());
     }
 
     /// <summary>The pauses of the returned visits' executions, by execution; no query when no field work was recorded.</summary>
@@ -282,6 +290,41 @@ public sealed class OperationalCalendarService(CrewCallDbContext db)
 
         return pauses.ToLookup(pause => pause.VisitExecutionId, pause => (pause.StartedAtUtc, pause.EndedAtUtc));
     }
+
+    /// <summary>The latest VisitRescheduled event of each returned visit (why it is where it is); no query without visits.</summary>
+    private async Task<Dictionary<Guid, OperationalCalendarRescheduleResponse>> LoadLastReschedulesAsync(
+        IReadOnlyCollection<VisitRow> rows, CancellationToken cancellationToken)
+    {
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var visitIds = rows.Select(row => row.VisitId).ToList();
+        var events = await db.OperationalEvents
+            .AsNoTracking()
+            .Where(e => e.AggregateType == WorkOrderEvents.VisitAggregate
+                && e.EventType == WorkOrderEvents.VisitRescheduled
+                && visitIds.Contains(e.AggregateId))
+            .OrderBy(e => e.Sequence)
+            .Select(e => new { e.AggregateId, e.OccurredAtUtc, e.PayloadJson })
+            .ToListAsync(cancellationToken);
+
+        var latest = new Dictionary<Guid, OperationalCalendarRescheduleResponse>();
+        foreach (var e in events)
+        {
+            if (JsonSerializer.Deserialize<VisitRescheduledPayload>(e.PayloadJson, PayloadJson) is { } moved)
+            {
+                latest[e.AggregateId] = new OperationalCalendarRescheduleResponse(
+                    moved.OldStart, moved.OldEnd, moved.NewStart, moved.NewEnd, moved.Reason, moved.IncidentId, e.OccurredAtUtc,
+                    (int)Math.Round((moved.NewStart - moved.OldStart).TotalMinutes));
+            }
+        }
+
+        return latest;
+    }
+
+    private static readonly JsonSerializerOptions PayloadJson = new(JsonSerializerDefaults.Web);
 
     /// <summary>The same derived metrics as the execution itself; null for a visit without field work.</summary>
     private static VisitExecutionMetrics? Metrics(VisitRow row, ILookup<Guid, (DateTimeOffset StartedAtUtc, DateTimeOffset? EndedAtUtc)> pauses) =>

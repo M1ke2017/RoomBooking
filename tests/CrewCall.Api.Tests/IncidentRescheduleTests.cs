@@ -72,6 +72,13 @@ public sealed class IncidentRescheduleTests(CrewCallApiFactory factory)
                 (y.Visit.Id, day.AddHours(14), day.AddHours(15.5), (Guid?)y.Assignment.AssignmentId)
             ],
             calendar.Items.Select(item => (item.VisitId, item.VisitStartUtc, item.VisitEndUtc, item.AssignmentId)));
+
+        // ... and why Y moved: its latest reschedule, caused by the urgent incident. X and the urgent visit never moved.
+        Assert.Equal(
+            new OperationalCalendarRescheduleResponse(day.AddHours(10.5), day.AddHours(12), day.AddHours(14), day.AddHours(15.5), "UrgentIncident", z.Id,
+                calendar.Items[2].LastReschedule!.OccurredAtUtc, 210),
+            calendar.Items[2].LastReschedule);
+        Assert.Equal([null, null], calendar.Items.Take(2).Select(item => item.LastReschedule));
     }
 
     // ---- Proposal ---------------------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-@page "/"
+@page "/status"
 @attribute [StreamRendering]
 @inject SystemStatusClient StatusClient
 
@@ -7,7 +7,7 @@
 <section class="panel" aria-labelledby="system-status">
     <div class="panel-header">
         <h1 id="system-status">System Status</h1>
-        <a class="refresh" href="/">Refresh</a>
+        <a class="refresh" href="/status">Refresh</a>
     </div>
 
     @if (status is null)
@@ -46,7 +46,7 @@
         </dl>
     }
 
-    <p class="muted"><a href="/live">Live operations</a> (developer tool)</p>
+    <p class="muted"><a href="/operations">Operations</a> · <a href="/live">Live operations</a> (developer tool)</p>
 </section>
 
 @code {

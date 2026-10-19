@@ -99,6 +99,16 @@ public sealed class LiveOperationGroupTests
     }
 
     [Fact]
+    public void A_new_incident_goes_to_all_its_incident_and_its_site()
+    {
+        var created = new IncidentCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Critical", OccurredAt, OccurredAt.AddHours(1));
+
+        var groups = LiveOperationGroups.For(created, new LiveRoutingContext(created.SiteId, []));
+
+        Assert.Equal(["all", LiveOperationGroups.Incident(created.IncidentId), LiveOperationGroups.Site(created.SiteId)], groups);
+    }
+
+    [Fact]
     public void Assignment_replaced_goes_to_both_technicians_once_each()
     {
         var replaced = new AssignmentReplacedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());

@@ -23,9 +23,16 @@ public static class LiveOperationTypes
     public const string IncidentDispatched = "incident.dispatched";
     public const string VisitWorkCompleted = "visit.work.completed";
     public const string VisitRescheduled = "visit.rescheduled";
+    public const string IncidentCreated = "incident.created";
+    public const string VisitCreated = "visit.created";
+    public const string VisitStatusChanged = "visit.status.changed";
+    public const string VisitFieldWorkChanged = "visit.field-work.changed";
 
     public static IReadOnlyList<string> All { get; } =
-        [AssignmentCreated, AssignmentReplaced, AssignmentCancelled, IncidentDispatched, VisitWorkCompleted, VisitRescheduled];
+    [
+        AssignmentCreated, AssignmentReplaced, AssignmentCancelled, IncidentDispatched, VisitWorkCompleted, VisitRescheduled,
+        IncidentCreated, VisitCreated, VisitStatusChanged, VisitFieldWorkChanged
+    ];
 }
 
 /// <summary>The SignalR surface shared by the hub and its clients.</summary>

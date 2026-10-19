@@ -31,6 +31,7 @@ public sealed record OperationalCalendarResponse(
 /// <param name="ActualTravelMinutes">Work start − travel start, when both were recorded.</param>
 /// <param name="ActualWorkMinutes">Net work minutes (gross minus pauses), only once Completed.</param>
 /// <param name="PauseMinutes">Closed pauses; null without field work.</param>
+/// <param name="LastReschedule">The visit's latest move and its reason; null when it was never moved.</param>
 public sealed record OperationalCalendarItemResponse(
     Guid VisitId,
     DateTimeOffset VisitStartUtc,
@@ -65,6 +66,22 @@ public sealed record OperationalCalendarItemResponse(
     DateTimeOffset? CompletedAtUtc,
     decimal? ActualTravelMinutes,
     decimal? ActualWorkMinutes,
-    decimal? PauseMinutes);
+    decimal? PauseMinutes,
+    OperationalCalendarRescheduleResponse? LastReschedule);
+
+/// <summary>
+/// Why the visit is where it is: its latest move (VisitRescheduled history, ADR-0017), e.g. Reason UrgentIncident with
+/// the incident that needed the slot. Null for a visit that was never moved.
+/// </summary>
+/// <param name="DelayMinutes">NewStartUtc − OldStartUtc.</param>
+public sealed record OperationalCalendarRescheduleResponse(
+    DateTimeOffset OldStartUtc,
+    DateTimeOffset OldEndUtc,
+    DateTimeOffset NewStartUtc,
+    DateTimeOffset NewEndUtc,
+    string Reason,
+    Guid? IncidentId,
+    DateTimeOffset OccurredAtUtc,
+    int DelayMinutes);
 
 public sealed record OperationalCalendarEquipmentResponse(Guid EquipmentId, string Name, string AssetCode);

@@ -63,8 +63,8 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
             $"a log with {string.Join(", ", parts)}");
 
     /// <summary>
-    /// The visit's outbox message of one type. Since Sprint 14 a completed visit has four: visit.created, two
-    /// visit.status-changed (InProgress, Completed) and visit.work-completed.
+    /// The visit's outbox message of one type. Since Sprint 16 a completed visit has five: visit.created, two
+    /// visit.status-changed (InProgress, Completed), visit.field-work-changed (Working) and visit.work-completed.
     /// </summary>
     private static async Task<OutboxMessage> OutboxForVisitAsync(ServiceProvider services, Guid visitId, string type = "visit.work-completed")
     {
@@ -233,7 +233,7 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
         var outbox = await OutboxForVisitAsync(services, visitId);
         await using (var downPublisher = new RabbitMqMessagePublisher(broker, Options.Create(new OutboxPublisherOptions())))
         {
-            Assert.Equal(new OutboxBatchResult(4, 0, 1), await MessagingInfrastructure.Processor(services, downPublisher, clock).ProcessBatchAsync(Cancellation));
+            Assert.Equal(new OutboxBatchResult(5, 0, 1), await MessagingInfrastructure.Processor(services, downPublisher, clock).ProcessBatchAsync(Cancellation));
         }
 
         Assert.Empty(signalR.Published);
@@ -243,7 +243,7 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
         clock.Advance(TimeSpan.FromSeconds(3));
         await using (var publisher = new RabbitMqMessagePublisher(broker, Options.Create(new OutboxPublisherOptions())))
         {
-            Assert.Equal(new OutboxBatchResult(4, 4, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
+            Assert.Equal(new OutboxBatchResult(5, 5, 0), await MessagingInfrastructure.Processor(services, publisher, clock).ProcessBatchAsync(Cancellation));
         }
 
         await Wait.UntilAsync(() => Task.FromResult(signalR.Published.Any(m => m.MessageId == outbox.Id)), "the live broadcast");
@@ -272,11 +272,12 @@ public sealed class LiveOperationsConsumerTests(MessagingInfrastructure infrastr
         await BusinessFlow.CompleteWorkAsync(services, visitId);
         var outbox = await OutboxForVisitAsync(services, visitId);
 
-        var received = await everything.NextAsync();
+        // The visit's earlier changes (created, work started) are live too; the completion is the one this test follows.
+        var received = await everything.NextOfTypeAsync(LiveOperationTypes.VisitWorkCompleted);
         Assert.Equal(
             (outbox.Id, "visit.work.completed", visitId, outbox.OccurredAtUtc),
             (received.MessageId, received.Type, received.EntityId, received.OccurredAtUtc));
-        Assert.Equal(outbox.Id, (await site.NextAsync()).MessageId);
+        Assert.Equal(outbox.Id, (await site.NextOfTypeAsync(LiveOperationTypes.VisitWorkCompleted)).MessageId);
 
         // The audit consumer handled the same message too: one inbox record per consumer.
         await Wait.UntilAsync(async () => (await InboxConsumersAsync(services, outbox.Id)).Count == 2, "both inbox records");

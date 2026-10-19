@@ -35,6 +35,15 @@ public sealed class LiveRoutingLookup(CrewCallDbContext db)
             VisitRescheduledIntegrationEvent rescheduled =>
                 new(await SiteOfVisitAsync(rescheduled.VisitId, cancellationToken), await ActiveTechniciansOfAsync(rescheduled.VisitId, cancellationToken)),
 
+            VisitStatusChangedIntegrationEvent changed =>
+                new(await SiteOfVisitAsync(changed.VisitId, cancellationToken), await ActiveTechniciansOfAsync(changed.VisitId, cancellationToken)),
+            VisitFieldWorkChangedIntegrationEvent changed =>
+                new(await SiteOfVisitAsync(changed.VisitId, cancellationToken), await ActiveTechniciansOfAsync(changed.VisitId, cancellationToken)),
+
+            // The event names the site; a new visit or incident has no technician yet.
+            VisitCreatedIntegrationEvent created => new(created.SiteId, []),
+            IncidentCreatedIntegrationEvent created => new(created.SiteId, []),
+
             _ => LiveRoutingContext.None
         };
 

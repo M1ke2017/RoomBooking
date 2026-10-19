@@ -28,6 +28,7 @@ public static class LiveOperationGroups
             AssignmentCreatedIntegrationEvent created => ((Guid?)null, (Guid?)created.TechnicianId),
             IncidentDispatchedIntegrationEvent dispatched => (dispatched.IncidentId, dispatched.TechnicianId),
             VisitRescheduledIntegrationEvent rescheduled => (rescheduled.IncidentId, null),
+            IncidentCreatedIntegrationEvent created => ((Guid?)created.IncidentId, (Guid?)null),
             _ => (null, null)
         };
 

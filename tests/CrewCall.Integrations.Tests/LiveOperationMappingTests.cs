@@ -38,7 +38,11 @@ public sealed class LiveOperationMappingTests
             { new AssignmentCancelledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, assignment, VisitId), "assignment.cancelled", assignment },
             { new IncidentDispatchedIntegrationEvent(Guid.NewGuid(), OccurredAt, Correlation, incident, Guid.NewGuid(), VisitId, assignment, TechnicianId), "incident.dispatched", incident },
             { new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, Guid.NewGuid(), 12m, 60m, 5m, 55m), "visit.work.completed", VisitId },
-            { new VisitRescheduledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, OccurredAt, OccurredAt.AddHours(1), OccurredAt.AddHours(4), OccurredAt.AddHours(5), "UrgentIncident", incident), "visit.rescheduled", VisitId }
+            { new VisitRescheduledIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, OccurredAt, OccurredAt.AddHours(1), OccurredAt.AddHours(4), OccurredAt.AddHours(5), "UrgentIncident", incident), "visit.rescheduled", VisitId },
+            { new IncidentCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, Correlation, incident, Guid.NewGuid(), Guid.NewGuid(), "Critical", OccurredAt, OccurredAt.AddHours(1)), "incident.created", incident },
+            { new VisitCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), OccurredAt, OccurredAt.AddHours(1), OccurredAt, "Normal"), "visit.created", VisitId },
+            { new VisitStatusChangedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, "Planned", "InProgress"), "visit.status.changed", VisitId },
+            { new VisitFieldWorkChangedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, VisitId, Guid.NewGuid(), "Traveling"), "visit.field-work.changed", VisitId }
         };
     }
 
@@ -103,7 +107,10 @@ public sealed class LiveOperationMappingTests
     public void The_live_queue_is_bound_to_exactly_the_supported_routing_keys()
     {
         Assert.Equal(
-            ["assignment.created", "assignment.replaced", "assignment.cancelled", "incident.dispatched", "visit.work.completed", "visit.rescheduled"],
+            [
+                "assignment.created", "assignment.replaced", "assignment.cancelled", "incident.dispatched", "visit.work.completed", "visit.rescheduled",
+                "incident.created", "visit.created", "visit.status.changed", "visit.field-work.changed"
+            ],
             LiveOperationMapper.SupportedRoutingKeys);
         Assert.Equal(LiveOperationTypes.All.Count, LiveOperationMapper.SupportedRoutingKeys.Count);
     }

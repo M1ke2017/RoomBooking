@@ -28,7 +28,11 @@ public static class LiveOperationMapper
         IntegrationEventCatalog.AssignmentCancelled.RoutingKey,
         IntegrationEventCatalog.IncidentDispatched.RoutingKey,
         IntegrationEventCatalog.VisitWorkCompleted.RoutingKey,
-        IntegrationEventCatalog.VisitRescheduled.RoutingKey
+        IntegrationEventCatalog.VisitRescheduled.RoutingKey,
+        IntegrationEventCatalog.IncidentCreated.RoutingKey,
+        IntegrationEventCatalog.VisitCreated.RoutingKey,
+        IntegrationEventCatalog.VisitStatusChanged.RoutingKey,
+        IntegrationEventCatalog.VisitFieldWorkChanged.RoutingKey
     ];
 
     /// <summary>
@@ -46,6 +50,10 @@ public static class LiveOperationMapper
             ("incident.dispatched", 1) => typeof(IncidentDispatchedIntegrationEvent),
             ("visit.work-completed", 1) => typeof(VisitWorkCompletedIntegrationEvent),
             ("visit.rescheduled", 1) => typeof(VisitRescheduledIntegrationEvent),
+            ("incident.created", 1) => typeof(IncidentCreatedIntegrationEvent),
+            ("visit.created", 1) => typeof(VisitCreatedIntegrationEvent),
+            ("visit.status-changed", 1) => typeof(VisitStatusChangedIntegrationEvent),
+            ("visit.field-work-changed", 1) => typeof(VisitFieldWorkChangedIntegrationEvent),
             _ => null
         };
 
@@ -83,6 +91,10 @@ public static class LiveOperationMapper
             IncidentDispatchedIntegrationEvent dispatched => (LiveOperationTypes.IncidentDispatched, dispatched.IncidentId),
             VisitWorkCompletedIntegrationEvent completed => (LiveOperationTypes.VisitWorkCompleted, completed.VisitId),
             VisitRescheduledIntegrationEvent rescheduled => (LiveOperationTypes.VisitRescheduled, rescheduled.VisitId),
+            IncidentCreatedIntegrationEvent created => (LiveOperationTypes.IncidentCreated, created.IncidentId),
+            VisitCreatedIntegrationEvent created => (LiveOperationTypes.VisitCreated, created.VisitId),
+            VisitStatusChangedIntegrationEvent changed => (LiveOperationTypes.VisitStatusChanged, changed.VisitId),
+            VisitFieldWorkChangedIntegrationEvent changed => (LiveOperationTypes.VisitFieldWorkChanged, changed.VisitId),
             _ => throw new ArgumentException($"{integrationEvent.GetType().Name} has no live mapping.", nameof(integrationEvent))
         };
 

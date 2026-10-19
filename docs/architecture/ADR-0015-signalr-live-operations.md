@@ -142,8 +142,14 @@ EntityType, Action, `Related` and Summary were removed; the type names the entit
 | `incident.dispatched` | `incident.dispatched` | incident | all, incident, technician, site |
 | `visit.work-completed` | `visit.work.completed` | visit | all, technician of the active assignment, site |
 | `visit.rescheduled` *(Sprint 15)* | `visit.rescheduled` | visit | all, incident, technician of the active assignment, site |
+| `incident.created` *(Sprint 16)* | `incident.created` | incident | all, incident, site |
+| `visit.created` *(Sprint 16)* | `visit.created` | visit | all, site |
+| `visit.status-changed` *(Sprint 16)* | `visit.status.changed` | visit | all, technician of the active assignment, site |
+| `visit.field-work-changed` *(Sprint 16)* | `visit.field-work.changed` | visit | all, technician of the active assignment, site |
 
-**Queue.** The live queue `crewcall.live-operations` is bound to exactly these six routing keys.
+**Queue.** The live queue `crewcall.live-operations` is bound to exactly these ten routing keys. Sprint 16 added the last
+four, so the manager screen (`/operations`) refreshes when a new incident arrives and when a technician starts travel or
+work, pauses or resumes.
 
 **Routing context.** The site, and technicians known only by assignment id, are not in the v1 events. The v1 contracts
 stay unchanged; instead there is a minimal read-only lookup:

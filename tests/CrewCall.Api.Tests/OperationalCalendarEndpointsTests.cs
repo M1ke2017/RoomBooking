@@ -465,7 +465,7 @@ public sealed class OperationalCalendarEndpointsTests(CrewCallApiFactory factory
             var queries = await SqlCommandCounter.CountAsync(async () =>
                 outcome = await service.GetAsync(
                     new OperationalCalendarQuery(slot, slot.AddDays(1), perspective, perspectiveId, "Europe/Warsaw"), Cancellation));
-            return (queries, Assert.IsType<OperationalCalendarOutcome.Listed>(outcome).Calendar.Items.Count);
+            return (queries, Assert.IsType<OperationalCalendarOutcome.Listed>(outcome).Calendar.Items.Length);
         }
 
         var small = await SlotWithAssignedVisitsAsync(1);
@@ -477,7 +477,7 @@ public sealed class OperationalCalendarEndpointsTests(CrewCallApiFactory factory
 
         Assert.Equal((1, 12, 12), (smallItems, largeItems, technicianItems));
         Assert.Equal(smallQueries, largeQueries);
-        Assert.Equal(2, largeQueries);      // visits (with joins) + equipment
-        Assert.Equal(3, technicianQueries); // + the perspective existence check
+        Assert.Equal(3, largeQueries);      // visits (with joins) + equipment + reschedule history
+        Assert.Equal(4, technicianQueries); // + the perspective existence check
     }
 }

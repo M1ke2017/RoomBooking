@@ -1,5 +1,6 @@
 using CrewCall.Contracts.Integration;
 using CrewCall.Scheduling.Assignments;
+using CrewCall.WorkOrders.Executions;
 using CrewCall.WorkOrders.Operations;
 
 namespace CrewCall.Persistence.Messaging;
@@ -47,8 +48,27 @@ public static class IntegrationEventMapper
                 rescheduled.VisitId, rescheduled.OldStart, rescheduled.OldEnd, rescheduled.NewStart, rescheduled.NewEnd,
                 rescheduled.Reason, rescheduled.IncidentId),
 
+            (IncidentEvents.IncidentCreated, IncidentCreatedPayload created) => new IncidentCreatedIntegrationEvent(
+                NewId(), occurredAtUtc, correlationId,
+                created.IncidentId, created.CustomerId, created.SiteId, created.Priority.ToString(), created.RequestedStart, created.RequestedEnd),
+
+            (VisitExecutionEvents.VisitTravelStarted, VisitTravelStartedPayload travel) =>
+                FieldWork(occurredAtUtc, correlationId, travel.VisitId, travel.ExecutionId, FieldWorkStatus.Traveling),
+            (VisitExecutionEvents.VisitWorkStarted, VisitWorkStartedPayload started) =>
+                FieldWork(occurredAtUtc, correlationId, started.VisitId, started.ExecutionId, FieldWorkStatus.Working),
+            (VisitExecutionEvents.VisitWorkPaused, VisitWorkPausedPayload paused) =>
+                FieldWork(occurredAtUtc, correlationId, paused.VisitId, paused.ExecutionId, FieldWorkStatus.Paused),
+            (VisitExecutionEvents.VisitWorkResumed, VisitWorkResumedPayload resumed) =>
+                FieldWork(occurredAtUtc, correlationId, resumed.VisitId, resumed.ExecutionId, FieldWorkStatus.Working),
+            (VisitExecutionEvents.VisitExecutionCancelled, VisitExecutionCancelledPayload cancelled) =>
+                FieldWork(occurredAtUtc, correlationId, cancelled.VisitId, cancelled.ExecutionId, FieldWorkStatus.Cancelled),
+
             _ => null
         };
+
+    private static VisitFieldWorkChangedIntegrationEvent FieldWork(
+        DateTimeOffset occurredAtUtc, Guid? correlationId, Guid visitId, Guid executionId, FieldWorkStatus status) =>
+        new(NewId(), occurredAtUtc, correlationId, visitId, executionId, status.ToString());
 
     private static Guid NewId() => Guid.CreateVersion7();
 }

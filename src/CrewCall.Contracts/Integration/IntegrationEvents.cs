@@ -100,3 +100,32 @@ public sealed record VisitRescheduledIntegrationEvent(
     DateTimeOffset NewEndUtc,
     string Reason,
     Guid? IncidentId) : IIntegrationEvent;
+
+/// <summary>
+/// incident.created v1 (Sprint 16): an urgent request for field work arrived. The manager's screen shows it live; it is
+/// not yet dispatched (incident.dispatched follows when a manager decides).
+/// </summary>
+/// <param name="Priority">"High", "Urgent" or "Critical".</param>
+public sealed record IncidentCreatedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredAtUtc,
+    Guid? CorrelationId,
+    Guid IncidentId,
+    Guid CustomerId,
+    Guid SiteId,
+    string Priority,
+    DateTimeOffset RequestedStartUtc,
+    DateTimeOffset RequestedEndUtc) : IIntegrationEvent;
+
+/// <summary>
+/// visit.field-work-changed v1 (Sprint 16): the technician's field work on a visit moved on (ADR-0013) — travel started,
+/// work started, paused, resumed or cancelled. Completion has its own event with the durations (visit.work-completed).
+/// </summary>
+/// <param name="FieldWorkStatus">The new state: "Traveling", "Working", "Paused" or "Cancelled".</param>
+public sealed record VisitFieldWorkChangedIntegrationEvent(
+    Guid EventId,
+    DateTimeOffset OccurredAtUtc,
+    Guid? CorrelationId,
+    Guid VisitId,
+    Guid ExecutionId,
+    string FieldWorkStatus) : IIntegrationEvent;
