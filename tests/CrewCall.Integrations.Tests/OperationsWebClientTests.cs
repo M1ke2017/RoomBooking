@@ -10,7 +10,7 @@ namespace CrewCall.Integrations.Tests;
 
 /// <summary>
 /// The manager screen's API client (CrewCall.Web, Sprint 16): what the screen shows when the API refuses, e.g. a stale
-/// proposal (409), and when the API is down. The page itself is checked in a browser (see the Sprint 16 report).
+/// proposal (409), and when the API is down: the manager's words, never the API's raw detail or an exception. The page itself is checked in a browser (see the Sprint 16 report).
 /// </summary>
 public sealed class OperationsWebClientTests
 {
@@ -22,7 +22,7 @@ public sealed class OperationsWebClientTests
         new RescheduleImpact(1, 1, 120, true, [], []), true);
 
     [Fact]
-    public async Task A_stale_proposal_comes_back_as_the_APIs_reason_and_the_exact_proposal_is_what_gets_accepted()
+    public async Task A_stale_proposal_is_explained_to_the_manager_and_the_exact_proposal_is_what_gets_accepted()
     {
         var handler = new StubHandler(HttpStatusCode.Conflict,
             """{"title":"Proposal out of date","detail":"Visit 'x' is InProgress; only planned visits are moved. Request a new proposal.","status":409}""");
@@ -31,14 +31,14 @@ public sealed class OperationsWebClientTests
         var result = await client.AcceptAsync(Proposal.IncidentId, Proposal, Cancellation);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Proposal out of date Visit 'x' is InProgress; only planned visits are moved. Request a new proposal.", result.Error);
+        Assert.Equal("Plan zmienił się od przygotowania propozycji. Pokaż nową propozycję.", result.Error);
         Assert.Equal($"/api/incidents/{Proposal.IncidentId}/reschedule-proposal/apply", handler.LastRequest!.RequestUri!.AbsolutePath);
         Assert.Contains($"\"movedVisitId\":\"{Proposal.ConflictingVisitId}\"", handler.LastBody);
         Assert.Contains("\"travelBufferAfterMinutes\":30", handler.LastBody);
     }
 
     [Fact]
-    public async Task Validation_errors_are_listed_and_an_unreachable_API_is_said_plainly()
+    public async Task A_rejected_request_and_an_unreachable_API_are_said_plainly()
     {
         var invalid = new OperationsApiClient(new HttpClient(new StubHandler(HttpStatusCode.BadRequest,
             """{"title":"One or more validation errors occurred.","status":400,"errors":{"date":["Must be a date, yyyy-MM-dd."]}}"""))
@@ -50,9 +50,10 @@ public sealed class OperationsWebClientTests
         var rejected = await invalid.GetBoardAsync(new DateOnly(2038, 6, 7), Cancellation);
         var unreachable = await down.GetBoardAsync(null, Cancellation);
 
-        Assert.Equal("One or more validation errors occurred. Must be a date, yyyy-MM-dd.", rejected.Error);
+        Assert.Equal("Serwer odrzucił żądanie jako nieprawidłowe. Odśwież widok i spróbuj ponownie.", rejected.Error);
         Assert.Null(rejected.Value);
-        Assert.StartsWith("CrewCall.Api jest niedostępne", unreachable.Error);
+        Assert.Equal(OperationsApiClient.Unreachable, unreachable.Error);
+        Assert.DoesNotContain("Connection refused", unreachable.Error);
     }
 
     private sealed class StubHandler : HttpMessageHandler

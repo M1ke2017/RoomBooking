@@ -6,9 +6,9 @@
 
     private string Label => State switch
     {
-        ComponentState.Healthy => "Healthy",
-        ComponentState.Degraded => "Degraded",
-        ComponentState.Unavailable => "Unavailable",
-        _ => "Unknown"
+        ComponentState.Healthy => "Działa",
+        ComponentState.Degraded => "Częściowo",
+        ComponentState.Unavailable => "Niedostępne",
+        _ => "Nieznany"
     };
 }

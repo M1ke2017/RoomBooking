@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using CrewCall.Contracts.Incidents;
 using CrewCall.Contracts.Operations;
@@ -6,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CrewCall.Web.Operations;
 
-/// <summary>A call's result: the value, or what the API said went wrong (its problem title and detail).</summary>
+/// <summary>A call's result: the value, or what went wrong, said for the manager (never the API's raw detail or an exception).</summary>
 public sealed record ApiResult<T>(T? Value, string? Error)
 {
     public bool Succeeded => Error is null;
@@ -50,6 +51,8 @@ public sealed class OperationsApiClient(HttpClient http)
     public Task<ApiResult<object>> SeedDemoAsync(CancellationToken cancellationToken) =>
         SendAsync<object>(() => http.PostAsync("/api/demo/seed", null, cancellationToken), cancellationToken);
 
+    public const string Unreachable = "Nie można połączyć się z serwerem CrewCall. Spróbuj ponownie za chwilę.";
+
     private static async Task<ApiResult<T>> SendAsync<T>(Func<Task<HttpResponseMessage>> send, CancellationToken cancellationToken)
     {
         try
@@ -60,22 +63,37 @@ public sealed class OperationsApiClient(HttpClient http)
                 return new ApiResult<T>(await response.Content.ReadFromJsonAsync<T>(cancellationToken), null);
             }
 
-            var problem = await ReadProblemAsync(response, cancellationToken);
-            return new ApiResult<T>(default, problem ?? $"HTTP {(int)response.StatusCode}");
+            return new ApiResult<T>(default, Explain(response.StatusCode, await ReadTitleAsync(response, cancellationToken)));
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            return new ApiResult<T>(default, $"CrewCall.Api jest niedostępne ({exception.Message}).");
+            return new ApiResult<T>(default, Unreachable);
         }
     }
 
-    private static async Task<string?> ReadProblemAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    /// <summary>The API's refusal in the manager's words: what happened and what to do next.</summary>
+    public static string Explain(HttpStatusCode status, string? title) => title switch
+    {
+        "Proposal out of date" => "Plan zmienił się od przygotowania propozycji. Pokaż nową propozycję.",
+        "Incident already dispatched" => "To zgłoszenie zostało już przydzielone.",
+        "Incident not ready for dispatch" => "Najpierw przeanalizuj zgłoszenie.",
+        "Incident cannot be analysed" => "Tego zgłoszenia nie można już analizować — zostało przydzielone lub zamknięte.",
+        "Resources not available" => "Technik, pojazd lub sprzęt nie jest już dostępny w tym terminie. Przeanalizuj zgłoszenie ponownie.",
+        "Concurrent change" => "Ktoś inny właśnie zmienił to zgłoszenie. Odśwież dane i spróbuj ponownie.",
+        _ => status switch
+        {
+            HttpStatusCode.NotFound => "Nie znaleziono danych — mogły zostać usunięte. Odśwież widok.",
+            HttpStatusCode.BadRequest => "Serwer odrzucił żądanie jako nieprawidłowe. Odśwież widok i spróbuj ponownie.",
+            HttpStatusCode.Conflict => "Dane zmieniły się w międzyczasie. Odśwież widok i spróbuj ponownie.",
+            _ => "Serwer CrewCall zgłosił błąd. Spróbuj ponownie za chwilę."
+        }
+    };
+
+    private static async Task<string?> ReadTitleAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         try
         {
-            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(cancellationToken);
-            var errors = problem?.Errors.SelectMany(error => error.Value).ToArray() ?? [];
-            return problem is null ? null : string.Join(" ", new[] { problem.Title, problem.Detail }.Concat(errors).Where(text => !string.IsNullOrWhiteSpace(text)));
+            return (await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken))?.Title;
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or NotSupportedException)
         {

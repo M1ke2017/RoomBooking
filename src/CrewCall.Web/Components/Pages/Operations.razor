@@ -26,35 +26,59 @@
             <button class="btn" @onclick="() => ShiftDayAsync(-1)" aria-label="Poprzedni dzień">‹</button>
             <button class="btn" @onclick="TodayAsync">Dziś</button>
             <button class="btn" @onclick="() => ShiftDayAsync(1)" aria-label="Następny dzień">›</button>
-            <span class="live-pill live-pill-@live.ToString().ToLowerInvariant()" title="@(liveUpdatedAt is { } at ? $"Ostatnia zmiana na żywo: {at:HH:mm:ss}" : "Aktualizacje na żywo")">
+            <span class="live-pill live-pill-@live.ToString().ToLowerInvariant()" title="@(liveUpdatedAt is { } at ? $"Ostatnia zmiana na żywo: {Time(at)}" : "Aktualizacje na żywo")">
                 @LiveLabel
             </span>
         </div>
     </header>
 
+    @if (refreshing && board is not null)
+    {
+        <p class="muted small" role="status">Trwa odświeżanie danych…</p>
+    }
+
+    @if (liveClient is not null && live == LiveConnectionState.Reconnecting)
+    {
+        <p class="notice notice-warn" role="status">Połączenie na żywo zostało przerwane — trwa ponowne łączenie. Dane mogą być chwilowo nieaktualne.</p>
+    }
+    else if (liveClient is not null && live == LiveConnectionState.Disconnected && liveStarted)
+    {
+        <p class="notice notice-warn" role="status">
+            Brak aktualizacji na żywo — dane mogą być nieaktualne.
+            <button class="btn btn-small" @onclick="ReconnectAsync">Połącz ponownie</button>
+        </p>
+    }
+
     @if (error is not null)
     {
-        <p class="notice notice-error">@error</p>
+        <p class="notice notice-error" role="alert">@error <button class="btn btn-small" @onclick="LoadAsync">Spróbuj ponownie</button></p>
     }
 
     @if (board is null)
     {
-        <p class="muted">Wczytywanie planu…</p>
+        @if (error is null)
+        {
+            <p class="muted" role="status">Wczytywanie planu dnia…</p>
+        }
     }
     else
     {
-        @if (board.Alerts.Length > 0)
-        {
-            <section class="card alerts" aria-labelledby="alerts">
-                <h2 id="alerts">Uwaga <span class="count">@board.Alerts.Length</span></h2>
+        <section class="card alerts" aria-labelledby="alerts">
+            <h2 id="alerts">Alerty <span class="count">@board.Alerts.Length</span></h2>
+            @if (board.Alerts.Length == 0)
+            {
+                <p class="muted">Brak alertów — nic nie czeka na decyzję.</p>
+            }
+            else
+            {
                 <ul>
                     @foreach (var alert in board.Alerts)
                     {
                         <li class="alert alert-@alert.Severity.ToLowerInvariant()">@AlertText(alert)</li>
                     }
                 </ul>
-            </section>
-        }
+            }
+        </section>
 
         <div class="ops-grid">
             <div class="ops-main">
@@ -68,7 +92,7 @@
                     {
                         var incident = entry.Incident;
                         var panel = PanelOf(incident.Id);
-                        var open = incident.WorkOrderId is null && incident.Status is "New" or "Analyzing" or "ReadyForDispatch";
+                        var open = IsOpen(incident);
                         <article class="item incident @(open ? "incident-open" : "")">
                             <div class="item-head">
                                 <span class="tag tag-@incident.Priority.ToLowerInvariant()">@Priority(incident.Priority)</span>
@@ -76,57 +100,64 @@
                                 <span class="tag tag-status">@IncidentStatus(incident.Status)</span>
                             </div>
                             <p>@entry.CustomerName — @entry.SiteName, @entry.SiteCity</p>
-                            <p class="muted">Termin: @Time(incident.RequestedStart)–@Time(incident.RequestedEnd)@(incident.RequiredSkillCodes.Length > 0 ? $" · wymagane: {string.Join(", ", incident.RequiredSkillCodes)}" : "")</p>
-                            @if (entry.Analysis is { } analysis)
+                            <p class="muted">Termin @Time(incident.RequestedStart)–@Time(incident.RequestedEnd)@(incident.RequiredSkillCodes.Length > 0 ? $" · wymagane umiejętności: {string.Join(", ", incident.RequiredSkillCodes)}" : "")</p>
+                            @if (open && entry.Analysis is { } analysis)
                             {
                                 <p class="muted">
-                                    Analiza @Time(analysis.AnalyzedAtUtc): @analysis.DirectAssignmentCount wolnych,
-                                    @analysis.RequiresRescheduleCount wymaga przesunięcia, @analysis.UnavailableCount niedostępnych
-                                    @(open ? (analysis.DirectAssignmentCount > 0 ? "→ propozycja bez przesunięcia" : analysis.RequiresRescheduleCount > 0 ? "→ propozycja z przesunięciem" : "") : "")
+                                    Analiza z @Time(analysis.AnalyzedAtUtc): @analysis.DirectAssignmentCount wolnych ·
+                                    @analysis.RequiresRescheduleCount z konfliktem (możliwe przeplanowanie) · @analysis.UnavailableCount niedostępnych
                                 </p>
-                            }
-                            @if (panel.Message is { } message)
-                            {
-                                <p class="notice notice-ok">@message</p>
-                            }
-                            @if (panel.Error is { } panelError)
-                            {
-                                <p class="notice notice-error">@panelError</p>
                             }
                             @if (open)
                             {
+                                <p class="next-step">@NextStep(entry)</p>
+                            }
+                            @if (panel.Message is { } message)
+                            {
+                                <p class="notice notice-ok" role="status">@message</p>
+                            }
+                            @if (panel.Error is { } panelError)
+                            {
+                                <p class="notice notice-error" role="alert">@panelError</p>
+                            }
+                            @if (open && panel.Proposals is null)
+                            {
                                 <div class="actions">
-                                    <button class="btn" disabled="@panel.Busy" @onclick="() => AnalyzeAsync(incident.Id)">Analizuj</button>
-                                    <button class="btn" disabled="@(panel.Busy || incident.Status != "ReadyForDispatch")" @onclick="() => ProposeAsync(incident.Id)">Pokaż propozycję</button>
+                                    <button class="btn @(incident.Status == "New" ? "btn-primary" : "")" disabled="@panel.Busy" @onclick="() => AnalyzeAsync(incident.Id)">Analizuj</button>
+                                    <button class="btn @(incident.Status == "ReadyForDispatch" ? "btn-primary" : "")" disabled="@(panel.Busy || incident.Status != "ReadyForDispatch")" @onclick="() => ProposeAsync(incident.Id)">Pokaż propozycję</button>
                                 </div>
                             }
                             @if (open && panel.Proposals is { } proposals)
                             {
                                 @if (proposals.Length == 0)
                                 {
-                                    <p class="muted">Brak propozycji: nikt z zespołu nie pasuje do tego zgłoszenia.</p>
+                                    <p class="muted">Brak propozycji: nikt z zespołu nie może przyjąć tego zgłoszenia.</p>
                                 }
                                 @foreach (var proposal in proposals.Take(3))
                                 {
                                     var moved = proposal.ConflictingVisitId is { } conflictingId ? board.Today.FirstOrDefault(item => item.VisitId == conflictingId) : null;
+                                    var affected = proposal.Impact.AffectedVisits.FirstOrDefault();
                                     <div class="proposal @(proposal.IsFeasible ? "" : "proposal-infeasible")">
                                         <div class="item-head">
-                                            <strong>#@proposal.Rank @proposal.TechnicianName</strong>
-                                            <span class="tag @(proposal.IsFeasible ? "tag-ok" : "tag-bad")">@(proposal.IsFeasible ? (proposal.ConflictingVisitId is null ? "bez przesunięcia" : "z przesunięciem") : "niewykonalna")</span>
+                                            <strong>@proposal.TechnicianName</strong>
+                                            <span class="tag @(proposal.IsFeasible ? (proposal.ConflictingVisitId is null ? "tag-ok" : "tag-high") : "tag-bad")">@ProposalLabel(proposal)</span>
                                         </div>
                                         <dl class="facts">
+                                            <dt>Technik</dt><dd>@proposal.TechnicianName</dd>
                                             <dt>Zgłoszenie</dt><dd>@Time(proposal.UrgentVisitStartUtc)–@Time(proposal.UrgentVisitEndUtc)</dd>
                                             @if (proposal.ConflictingVisitId is not null)
                                             {
-                                                <dt>Konflikt</dt><dd>@(moved?.WorkOrderTitle ?? "wizyta") (@Priority(proposal.ConflictingPriority ?? "")) — @(moved is null ? "" : $"{moved.CustomerName}, {moved.SiteCity}")</dd>
+                                                <dt>Kolidująca wizyta</dt><dd>@(moved?.WorkOrderTitle ?? "wizyta technika") (priorytet @Priority(proposal.ConflictingPriority ?? "").ToLowerInvariant())</dd>
                                             }
-                                            @if (proposal.ProposedNewStartUtc is { } newStart && proposal.Impact.AffectedVisits.FirstOrDefault() is { } affected)
+                                            @if (proposal.IsFeasible && proposal.ProposedNewStartUtc is { } newStart && affected is not null)
                                             {
-                                                <dt>Przesunięcie</dt><dd>@Time(affected.OldStartUtc)–@Time(affected.OldEndUtc) → <strong>@Time(newStart)–@Time(proposal.ProposedNewEndUtc!.Value)</strong> (+@proposal.Impact.DelayMinutes min)</dd>
-                                                <dt>Klient</dt><dd>@(moved?.CustomerName ?? affected.CustomerId.ToString())</dd>
+                                                <dt>Obecny termin</dt><dd>@Time(affected.OldStartUtc)–@Time(affected.OldEndUtc)</dd>
+                                                <dt>Nowy termin</dt><dd><strong>@Time(newStart)–@Time(proposal.ProposedNewEndUtc!.Value)</strong>@(DayChange(affected))</dd>
+                                                <dt>Klient</dt><dd>@(moved is null ? "—" : $"{moved.CustomerName} — {moved.SiteName}, {moved.SiteCity}")</dd>
+                                                <dt>Opóźnienie</dt><dd>@Duration(affected.DelayMinutes)</dd>
+                                                <dt>Pojazd</dt><dd>@(moved?.VehicleRegistrationNumber is { } registration ? $"{moved.VehicleName} {registration}" : "—")</dd>
+                                                <dt>Sprzęt</dt><dd>@(moved is { Equipment.Length: > 0 } ? string.Join(", ", moved.Equipment.Select(e => e.Name)) : "—")</dd>
                                             }
-                                            <dt>Pojazd</dt><dd>@(proposal.VehicleId is null ? (moved?.VehicleRegistrationNumber is { } registration ? $"{registration} (przesuwana wizyta)" : "—") : proposal.VehicleId.ToString())</dd>
-                                            <dt>Sprzęt</dt><dd>@(proposal.EquipmentIds.Count == 0 ? "—" : $"{proposal.EquipmentIds.Count} szt.")</dd>
                                         </dl>
                                         @foreach (var warning in Warnings(proposal, moved, incident.Priority))
                                         {
@@ -134,10 +165,15 @@
                                         }
                                         @if (proposal.IsFeasible)
                                         {
-                                            <button class="btn btn-primary" disabled="@panel.Busy" @onclick="() => AcceptAsync(incident.Id, proposal)">Akceptuj</button>
+                                            <div class="actions">
+                                                <button class="btn btn-primary" disabled="@panel.Busy" @onclick="() => AcceptAsync(incident.Id, proposal)">Zatwierdź zmianę</button>
+                                            </div>
                                         }
                                     </div>
                                 }
+                                <div class="actions">
+                                    <button class="btn" disabled="@panel.Busy" @onclick="() => Back(incident.Id)">Wróć</button>
+                                </div>
                             }
                         </article>
                     }
@@ -148,7 +184,10 @@
                     @if (board.Today.Length == 0)
                     {
                         <p class="muted">Brak zaplanowanych wizyt na ten dzień.</p>
-                        <button class="btn" @onclick="SeedDemoAsync">Przygotuj dane demo</button>
+                        @if (day is null)
+                        {
+                            <button class="btn" @onclick="SeedDemoAsync">Przygotuj dane demo</button>
+                        }
                     }
                     @foreach (var visit in board.Today)
                     {
@@ -157,13 +196,13 @@
                                 <span class="time">@visit.VisitLocalStart.ToString("HH:mm")–@visit.VisitLocalEnd.ToString("HH:mm")</span>
                                 <strong>@(visit.TechnicianName ?? "Bez technika")</strong>
                                 <span class="tag tag-@visit.WorkOrderPriority.ToLowerInvariant()">@Priority(visit.WorkOrderPriority)</span>
-                                <span class="tag tag-work-@visit.FieldWorkStatus.ToLowerInvariant()">@FieldWork(visit.FieldWorkStatus)</span>
+                                <span class="tag tag-work-@visit.FieldWorkStatus.ToLowerInvariant()">@FieldWork(visit.FieldWorkStatus, visit.VisitStatus)</span>
                             </div>
                             <p>@visit.CustomerName — @visit.SiteName, @visit.SiteCity</p>
-                            <p class="muted">@visit.WorkOrderTitle · @VisitStatus(visit.VisitStatus)@(visit.VehicleRegistrationNumber is { } registration ? $" · {visit.VehicleName} {registration}" : "")@(visit.Equipment.Length > 0 ? $" · {string.Join(", ", visit.Equipment.Select(e => e.Name))}" : "")</p>
+                            <p class="muted">@visit.WorkOrderTitle@(visit.VehicleRegistrationNumber is { } registration ? $" · {visit.VehicleName} {registration}" : "")@(visit.Equipment.Length > 0 ? $" · {string.Join(", ", visit.Equipment.Select(e => e.Name))}" : "")</p>
                             @if (visit.LastReschedule is { } moved)
                             {
-                                <p class="note">↻ Przesunięta z @Time(moved.OldStartUtc)–@Time(moved.OldEndUtc) (+@moved.DelayMinutes min) — @Reason(moved.Reason), @Time(moved.OccurredAtUtc)</p>
+                                <p class="note">↻ Przesunięta z @Time(moved.OldStartUtc)–@Time(moved.OldEndUtc) (+@Duration(moved.DelayMinutes)) — @Reason(moved.Reason), decyzja z @Time(moved.OccurredAtUtc)</p>
                             }
                         </article>
                     }
@@ -171,31 +210,13 @@
             </div>
 
             <div class="ops-side">
-                <section class="card" aria-labelledby="team">
-                    <h2 id="team">Zespół <span class="count">@board.Team.Length</span></h2>
-                    @foreach (var member in board.Team)
-                    {
-                        <article class="item member">
-                            <div class="item-head">
-                                <strong>@member.DisplayName</strong>
-                                <span class="tag tag-state-@member.State.ToLowerInvariant()">@TeamState(member.State)</span>
-                            </div>
-                            <p class="muted">@MemberDetail(member)</p>
-                            @if (member.PhoneNumber is { } phone)
-                            {
-                                <a class="btn btn-call" href="tel:@phone">Zadzwoń</a>
-                            }
-                        </article>
-                    }
-                </section>
-
                 <section class="card" aria-labelledby="unassigned">
                     @{ var unassigned = board.Today.Where(item => item.AssignmentId is null && item.VisitStatus == "Planned").ToList();
-                       var waiting = board.Incidents.Where(entry => entry.Incident.WorkOrderId is null && entry.Incident.Status is "New" or "Analyzing" or "ReadyForDispatch").ToList(); }
+                       var waiting = board.Incidents.Where(entry => IsOpen(entry.Incident)).ToList(); }
                     <h2 id="unassigned">Nieprzypisane <span class="count">@(unassigned.Count + waiting.Count)</span></h2>
                     @if (unassigned.Count + waiting.Count == 0)
                     {
-                        <p class="muted">Wszystko ma technika.</p>
+                        <p class="muted">Brak nieprzypisanych wizyt.</p>
                     }
                     @foreach (var entry in waiting)
                     {
@@ -207,21 +228,50 @@
                     }
                 </section>
 
+                <section class="card" aria-labelledby="team">
+                    <h2 id="team">Zespół <span class="count">@board.Team.Length</span></h2>
+                    @if (board.Team.Length == 0)
+                    {
+                        <p class="muted">Brak aktywnych techników.</p>
+                    }
+                    @foreach (var member in board.Team)
+                    {
+                        <article class="item member">
+                            <div class="item-head">
+                                <strong>@member.DisplayName</strong>
+                                <span class="tag tag-state-@member.State.ToLowerInvariant()">@TeamState(member.State)</span>
+                            </div>
+                            <p class="muted">@MemberDetail(member)</p>
+                            @if (member.PhoneNumber is { } phone)
+                            {
+                                <a class="btn btn-call" href="tel:@phone" aria-label="Zadzwoń do: @member.DisplayName">Zadzwoń</a>
+                            }
+                        </article>
+                    }
+                </section>
+
                 <section class="card" aria-labelledby="report">
                     <h2 id="report">Raport dnia</h2>
                     @if (report is null)
                     {
-                        <p class="muted">Raportowanie jest niedostępne.</p>
+                        <p class="muted">Raport jest chwilowo niedostępny.</p>
+                    }
+                    else if (report.Visits.Count == 0)
+                    {
+                        <p class="muted">Brak danych w raporcie dla tego dnia.</p>
                     }
                     else
                     {
                         <dl class="facts">
                             <dt>Wizyty</dt><dd>@report.Visits.Count</dd>
                             <dt>Zakończone</dt><dd>@report.Visits.Count(v => v.Status == "Completed")</dd>
+                            <dt>Czas pracy</dt><dd>@Duration(report.Visits.Sum(v => v.ActualNetWorkMinutes ?? 0))</dd>
+                            <dt>Dojazdy</dt><dd>@Duration(report.Visits.Sum(v => v.ActualTravelMinutes ?? 0))</dd>
+                            <dt>Przerwy</dt><dd>@Duration(report.Visits.Sum(v => v.ActualPauseMinutes ?? 0))</dd>
                             <dt>Przesunięte</dt><dd>@report.Visits.Count(v => v.RescheduleCount > 0)</dd>
-                            <dt>Opóźnienie</dt><dd>@report.Visits.Sum(v => v.TotalDelayMinutes) min</dd>
+                            <dt>Łączne opóźnienie</dt><dd>@Duration(report.Visits.Sum(v => v.TotalDelayMinutes))</dd>
                         </dl>
-                        <p class="muted small">Dane z @(report.Metadata.DataAsOfUtc is { } asOf ? Time(asOf) : "—") (raporty są aktualizowane z opóźnieniem).</p>
+                        <p class="muted small">Stan na @(report.Metadata.DataAsOfUtc is { } asOf ? Time(asOf) : "—"). Raport aktualizuje się z niewielkim opóźnieniem.</p>
                     }
                 </section>
             </div>
@@ -241,6 +291,8 @@
     private LiveConnectionState live = LiveConnectionState.Disconnected;
     private DateTimeOffset? liveUpdatedAt;
     private CancellationTokenSource? pendingRefresh;
+    private bool refreshing;
+    private bool liveStarted;
 
     private sealed class IncidentPanel
     {
@@ -255,7 +307,7 @@
         if (LiveHubAddress.Resolve(Configuration) is { } hubUrl)
         {
             liveClient = new LiveOperationsClient(hubUrl, Services.GetRequiredService<ILogger<LiveOperationsClient>>());
-            liveClient.Changed += () => InvokeAsync(() => { live = liveClient.State; StateHasChanged(); });
+            liveClient.Changed += () => InvokeAsync(OnLiveStateChangedAsync);
             liveClient.Received += OnLiveMessage;
         }
 
@@ -267,19 +319,46 @@
         if (firstRender && liveClient is not null)
         {
             await liveClient.SubscribeAsync(LiveSubscription.All, CancellationToken.None);
-            await liveClient.StartAsync(CancellationToken.None);
+            await ReconnectAsync();
         }
+    }
+
+    private async Task ReconnectAsync()
+    {
+        liveStarted = true;
+        await liveClient!.StartAsync(CancellationToken.None);
+    }
+
+    /// <summary>After a reconnect, messages may have been missed: read the board again.</summary>
+    private async Task OnLiveStateChangedAsync()
+    {
+        var previous = live;
+        live = liveClient!.State;
+        if (previous == LiveConnectionState.Reconnecting && live == LiveConnectionState.Connected)
+        {
+            await LoadAsync();
+        }
+
+        StateHasChanged();
     }
 
     private async Task LoadAsync()
     {
-        var result = await Api.GetBoardAsync(day, CancellationToken.None);
-        error = result.Error;
-        if (result.Value is { } loaded)
+        refreshing = true;
+        try
         {
-            board = loaded;
-            zone = TimeZoneInfo.FindSystemTimeZoneById(loaded.TimeZoneId);
-            report = await Reporting.GetVisitsAsync(loaded.Date, CancellationToken.None);
+            var result = await Api.GetBoardAsync(day, CancellationToken.None);
+            error = result.Error;
+            if (result.Value is { } loaded)
+            {
+                board = loaded;
+                zone = TimeZoneInfo.FindSystemTimeZoneById(loaded.TimeZoneId);
+                report = await Reporting.GetVisitsAsync(loaded.Date, CancellationToken.None);
+            }
+        }
+        finally
+        {
+            refreshing = false;
         }
     }
 
@@ -326,8 +405,8 @@
             var free = analysis.Suggestions.Count(suggestion => suggestion.SuggestionType == "DirectAssignment");
             var busy = analysis.Suggestions.Count(suggestion => suggestion.SuggestionType == "RequiresReschedule");
             panel.Message = analysis.Suggestions.FirstOrDefault(suggestion => suggestion.SuggestionType != "Unavailable") is { } best
-                ? $"Najlepszy kandydat: {best.TechnicianName} — {Suggestion(best.SuggestionType)}. Wolnych: {free}, zajętych: {busy}, sprawdzono: {analysis.CandidatesEvaluated}."
-                : $"Nikt z zespołu nie może przyjąć tego zgłoszenia (sprawdzono: {analysis.CandidatesEvaluated}).";
+                ? $"Rekomendowany technik: {best.TechnicianName} — {Suggestion(best.SuggestionType)}. Wolnych: {free}, z konfliktem: {busy}."
+                : "Nikt z zespołu nie może przyjąć tego zgłoszenia w tym terminie.";
         }
 
         await EndAsync(panel, result.Error);
@@ -349,8 +428,8 @@
         {
             panel.Proposals = null;
             panel.Message = applied.MovedVisit is { } moved
-                ? $"Zaakceptowano: {proposal.TechnicianName} jedzie na zgłoszenie; wizyta przesunięta na {Time(moved.NewStartUtc)} (+{moved.DelayMinutes} min)."
-                : $"Zaakceptowano: {proposal.TechnicianName} jedzie na zgłoszenie.";
+                ? $"Zmiana zatwierdzona: {proposal.TechnicianName} jedzie na zgłoszenie, wizyta przesunięta na {Time(moved.NewStartUtc)}–{Time(moved.NewEndUtc)} (+{Duration(moved.DelayMinutes)})."
+                : $"Zmiana zatwierdzona: {proposal.TechnicianName} jedzie na zgłoszenie.";
         }
         else
         {
@@ -363,10 +442,47 @@
     private async Task SeedDemoAsync()
     {
         var result = await Api.SeedDemoAsync(CancellationToken.None);
-        error = result.Error is null ? null : $"Dane demo są niedostępne: {result.Error}";
+        error = result.Error is null ? null : "Nie udało się przygotować danych demo. Dane demo są dostępne przy uruchomieniu przez CrewCall.AppHost.";
         day = null;
         await LoadAsync();
     }
+
+    private void Back(Guid incidentId)
+    {
+        var panel = PanelOf(incidentId);
+        (panel.Proposals, panel.Error) = (null, null);
+    }
+
+    private static bool IsOpen(IncidentResponse incident) =>
+        incident.WorkOrderId is null && incident.Status is "New" or "Analyzing" or "ReadyForDispatch";
+
+    /// <summary>What the manager can do next with the incident.</summary>
+    private static string NextStep(OperationsBoardIncidentResponse entry) => (entry.Incident.Status, entry.Analysis) switch
+    {
+        ("New", _) => "Następny krok: przeanalizuj zgłoszenie, aby znaleźć technika.",
+        ("Analyzing", _) => "Trwa analiza zgłoszenia…",
+        (_, { DirectAssignmentCount: > 0 }) => "Następny krok: pokaż propozycję — jest wolny technik.",
+        (_, { RequiresRescheduleCount: > 0 }) => "Konflikt — możliwe przeplanowanie. Następny krok: pokaż propozycję przeplanowania.",
+        _ => "Nikt z zespołu nie jest dostępny — rozważ inny termin."
+    };
+
+    private static string ProposalLabel(RescheduleProposal proposal) =>
+        !proposal.IsFeasible ? "Niemożliwe"
+        : proposal.ConflictingVisitId is null ? "Bez zmian w planie"
+        : "Przeplanowanie 1 wizyty";
+
+    private string DayChange(AffectedVisit affected)
+    {
+        var (oldDay, newDay) = (TimeZoneInfo.ConvertTime(affected.OldStartUtc, zone).Date, TimeZoneInfo.ConvertTime(affected.NewStartUtc, zone).Date);
+        return oldDay == newDay ? "" : $" ({TimeZoneInfo.ConvertTime(affected.NewStartUtc, zone).ToString("dddd d MMMM", Polish)})";
+    }
+
+    private static string Duration(decimal minutes) => Duration((int)Math.Round(minutes));
+
+    private static string Duration(int minutes) =>
+        minutes < 60 ? $"{minutes} min"
+        : minutes % 60 == 0 ? $"{minutes / 60} h"
+        : $"{minutes / 60} h {minutes % 60} min";
 
     private IncidentPanel PanelOf(Guid incidentId) =>
         panels.TryGetValue(incidentId, out var panel) ? panel : panels[incidentId] = new IncidentPanel();
@@ -392,13 +508,13 @@
 
     private static readonly System.Globalization.CultureInfo Polish = System.Globalization.CultureInfo.GetCultureInfo("pl-PL");
 
-    private string DayLabel => board is null ? "" : $"{board.Date.ToDateTime(TimeOnly.MinValue).ToString("dddd, d MMMM yyyy", Polish)} · {board.TimeZoneId}";
+    private string DayLabel => board is null ? "" : board.Date.ToDateTime(TimeOnly.MinValue).ToString("dddd, d MMMM yyyy", Polish);
 
     private string LiveLabel => live switch
     {
         LiveConnectionState.Connected => "● Na żywo",
         LiveConnectionState.Connecting or LiveConnectionState.Reconnecting => "○ Łączenie…",
-        _ => liveClient is null ? "Bez aktualizacji na żywo" : "○ Offline"
+        _ => liveClient is null ? "Bez aktualizacji na żywo" : "○ Brak połączenia"
     };
 
     private string MemberDetail(OperationsBoardTechnicianResponse member) => member.State switch
@@ -410,17 +526,17 @@
             "OutsideWorkingHours" => "Poza godzinami pracy",
             _ => "Nieaktywny"
         },
-        "Available" => member.NextVisitStartUtc is { } next ? $"Następna wizyta {Time(next)} · dziś {member.VisitsToday}" : $"Wolny · dziś {member.VisitsToday}",
+        "Available" => member.NextVisitStartUtc is { } next ? $"Następna wizyta o {Time(next)} · wizyt dziś: {member.VisitsToday}" : $"Brak kolejnych wizyt · wizyt dziś: {member.VisitsToday}",
         _ => $"{member.StateDetail} — {member.CurrentSiteName}, {member.CurrentSiteCity}"
     };
 
     private string AlertText(OperationsBoardAlertResponse alert) => alert.Kind switch
     {
-        "IncidentAwaitingDecision" => $"Pilne zgłoszenie czeka na decyzję: {alert.Subject} (od {Time(alert.At)})",
-        "IncidentNeedsReschedule" => $"Konflikt: pasujący technicy są zajęci, potrzebne przesunięcie — {alert.Subject} (od {Time(alert.At)})",
-        "VisitRescheduled" => $"Wizyta przesunięta o {alert.Minutes} min na {Time(alert.At)}: {alert.Subject}",
-        "VisitLate" => $"Opóźnienie {alert.Minutes} min (plan {Time(alert.At)}): {alert.Subject}",
-        "VisitUnassigned" => $"Brak technika ({Time(alert.At)}): {alert.Subject}",
+        "IncidentAwaitingDecision" => $"Pilne zgłoszenie czeka na decyzję: {alert.Subject} (termin {Time(alert.At)}). Przeanalizuj je.",
+        "IncidentNeedsReschedule" => $"Konflikt — możliwe przeplanowanie: {alert.Subject} (termin {Time(alert.At)}). Pokaż propozycję.",
+        "VisitRescheduled" => $"Wizyta przesunięta na {Time(alert.At)} (+{Duration(alert.Minutes ?? 0)}): {alert.Subject}. Poinformuj klienta.",
+        "VisitLate" => $"Opóźnienie {Duration(alert.Minutes ?? 0)} (plan {Time(alert.At)}): {alert.Subject}. Skontaktuj się z technikiem.",
+        "VisitUnassigned" => $"Wizyta bez technika ({Time(alert.At)}): {alert.Subject}.",
         _ => alert.Subject
     };
 
@@ -439,24 +555,16 @@
         "New" => "Nowe",
         "Analyzing" => "Analiza",
         "ReadyForDispatch" => "Czeka na decyzję",
-        "Dispatched" => "Wysłane",
+        "Dispatched" => "Technik w drodze",
         "Resolved" => "Rozwiązane",
         "Cancelled" => "Anulowane",
         _ => status
     };
 
-    private static string VisitStatus(string status) => status switch
+    /// <summary>One label per visit: what is happening on site, or the plan when nothing has started.</summary>
+    private static string FieldWork(string status, string visitStatus) => status switch
     {
-        "Planned" => "zaplanowana",
-        "InProgress" => "w toku",
-        "Completed" => "zakończona",
-        "Cancelled" => "anulowana",
-        _ => status
-    };
-
-    private static string FieldWork(string status) => status switch
-    {
-        "NotStarted" => "Nierozpoczęta",
+        "NotStarted" => visitStatus == "Cancelled" ? "Anulowana" : "Zaplanowana",
         "Traveling" => "W drodze",
         "Working" => "Praca",
         "Paused" => "Przerwa",
@@ -477,8 +585,8 @@
 
     private static string Suggestion(string type) => type switch
     {
-        "DirectAssignment" => "wolny, przypisanie bez zmian",
-        "RequiresReschedule" => "zajęty, wymaga przesunięcia",
+        "DirectAssignment" => "wolny, można przypisać od razu",
+        "RequiresReschedule" => "konflikt — możliwe przeplanowanie",
         _ => "niedostępny"
     };
 
@@ -494,11 +602,7 @@
         {
             if (proposal.Impact.AffectedVisits.FirstOrDefault() is { } affected)
             {
-                yield return $"Poinformuj klienta {moved?.CustomerName ?? "wizyty"}: wizyta przesuwa się o {affected.DelayMinutes} min.";
-                if (TimeZoneInfo.ConvertTime(affected.NewStartUtc, zone).Date != TimeZoneInfo.ConvertTime(affected.OldStartUtc, zone).Date)
-                {
-                    yield return $"Wizyta przechodzi na {TimeZoneInfo.ConvertTime(affected.NewStartUtc, zone).ToString("dddd d MMMM", Polish)}.";
-                }
+                yield return $"Po zatwierdzeniu poinformuj klienta {moved?.CustomerName ?? "przesuwanej wizyty"} o nowym terminie (+{Duration(affected.DelayMinutes)}).";
             }
 
             yield break;
@@ -515,10 +619,7 @@
         }
         else
         {
-            foreach (var warning in proposal.Impact.Warnings)
-            {
-                yield return warning;
-            }
+            yield return "Ten wariant nie zwalnia terminu: kolidującej pracy nie da się przesunąć bez kolejnych zmian.";
         }
     }
 

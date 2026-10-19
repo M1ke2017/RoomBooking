@@ -12,12 +12,12 @@ public sealed class SystemStatusClient(HttpClient httpClient, ILogger<SystemStat
 
     public async Task<SystemStatus> GetAsync(CancellationToken cancellationToken = default)
     {
-        var apiService = httpClient.BaseAddress?.ToString() ?? "(not configured)";
+        var apiService = httpClient.BaseAddress?.ToString() ?? "(nie skonfigurowano)";
 
         var api = await ProbeApiAsync(cancellationToken);
         var database = api.State == ComponentState.Healthy
             ? await ProbeDatabaseAsync(cancellationToken)
-            : new ComponentStatus(ComponentState.Unknown, "Not reported: the API is unreachable.");
+            : new ComponentStatus(ComponentState.Unknown, "Brak danych: API jest nieosiągalne.");
 
         return new SystemStatus(api, database, apiService, DateTimeOffset.UtcNow);
     }
@@ -29,8 +29,8 @@ public sealed class SystemStatusClient(HttpClient httpClient, ILogger<SystemStat
             using var response = await httpClient.GetAsync("/alive", cancellationToken);
 
             return response.IsSuccessStatusCode
-                ? new ComponentStatus(ComponentState.Healthy, "Liveness check passed.")
-                : new ComponentStatus(ComponentState.Unavailable, $"Liveness check returned HTTP {(int)response.StatusCode}.");
+                ? new ComponentStatus(ComponentState.Healthy, "Test działania zaliczony.")
+                : new ComponentStatus(ComponentState.Unavailable, $"Test działania zwrócił HTTP {(int)response.StatusCode}.");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -49,16 +49,16 @@ public sealed class SystemStatusClient(HttpClient httpClient, ILogger<SystemStat
 
             return check?.Status switch
             {
-                "Healthy" => new ComponentStatus(ComponentState.Healthy, "Database check passed."),
-                "Degraded" => new ComponentStatus(ComponentState.Degraded, check.Description ?? "Database check degraded."),
-                "Unhealthy" => new ComponentStatus(ComponentState.Unavailable, check.Description ?? "Database check failed."),
-                _ => new ComponentStatus(ComponentState.Unknown, "Database check not reported by the API.")
+                "Healthy" => new ComponentStatus(ComponentState.Healthy, "Test bazy danych zaliczony."),
+                "Degraded" => new ComponentStatus(ComponentState.Degraded, check.Description ?? "Baza danych działa częściowo."),
+                "Unhealthy" => new ComponentStatus(ComponentState.Unavailable, check.Description ?? "Test bazy danych nieudany."),
+                _ => new ComponentStatus(ComponentState.Unknown, "API nie zgłosiło stanu bazy danych.")
             };
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new ComponentStatus(ComponentState.Unavailable,
-                $"No response from the database health check within {httpClient.Timeout.TotalSeconds:0} s.");
+                $"Brak odpowiedzi testu bazy danych w ciągu {httpClient.Timeout.TotalSeconds:0} s.");
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
