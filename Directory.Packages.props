@@ -13,6 +13,9 @@
   <ItemGroup Label="Aspire hosting">
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.0" />
     <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="13.6.0" />
+    <!-- Transitive through Aspire.Hosting; pinned past GHSA-qhrr-8q5h-9q3h (2.5.302 is vulnerable). Drop with an Aspire
+         release that brings a fixed version itself. -->
+    <PackageVersion Include="MessagePack" Version="2.5.307" />
   </ItemGroup>
 
   <ItemGroup Label="Aspire service defaults">
@@ -53,7 +56,7 @@
   </ItemGroup>
 
   <ItemGroup Label="Web">
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup Label="Tests">
