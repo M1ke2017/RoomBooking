@@ -5,19 +5,14 @@ using CrewCall.WorkOrders.Operations;
 namespace CrewCall.Persistence.Messaging;
 
 /// <summary>
-/// Decides which operational events become integration events, and builds them (ADR-0014). Most operational events stay
-/// internal history; only explicitly mapped ones are published.
+/// Decides which operational events become integration events, and builds them (ADR-0014): the explicit mapping table,
+/// operational event type and payload → published integration event. Most operational events stay internal history;
+/// only explicitly mapped ones are published.
 /// </summary>
-public interface IIntegrationEventMapper
+public static class IntegrationEventMapper
 {
     /// <summary>The integration event for this operational event, or null when it is not published.</summary>
-    IIntegrationEvent? Map(string operationalEventType, DateTimeOffset occurredAtUtc, object payload, Guid? correlationId);
-}
-
-/// <summary>The explicit mapping table: operational event type and payload → published integration event.</summary>
-public sealed class IntegrationEventMapper : IIntegrationEventMapper
-{
-    public IIntegrationEvent? Map(string operationalEventType, DateTimeOffset occurredAtUtc, object payload, Guid? correlationId) =>
+    public static IIntegrationEvent? Map(string operationalEventType, DateTimeOffset occurredAtUtc, object payload, Guid? correlationId) =>
         (operationalEventType, payload) switch
         {
             (AssignmentEvents.AssignmentCreated, AssignmentCreatedPayload created) => new AssignmentCreatedIntegrationEvent(
@@ -46,6 +41,11 @@ public sealed class IntegrationEventMapper : IIntegrationEventMapper
 
             (WorkOrderEvents.VisitStatusChanged, VisitStatusChangedPayload changed) => new VisitStatusChangedIntegrationEvent(
                 NewId(), occurredAtUtc, correlationId, changed.VisitId, changed.OldStatus.ToString(), changed.NewStatus.ToString()),
+
+            (WorkOrderEvents.VisitRescheduled, VisitRescheduledPayload rescheduled) => new VisitRescheduledIntegrationEvent(
+                NewId(), occurredAtUtc, correlationId,
+                rescheduled.VisitId, rescheduled.OldStart, rescheduled.OldEnd, rescheduled.NewStart, rescheduled.NewEnd,
+                rescheduled.Reason, rescheduled.IncidentId),
 
             _ => null
         };

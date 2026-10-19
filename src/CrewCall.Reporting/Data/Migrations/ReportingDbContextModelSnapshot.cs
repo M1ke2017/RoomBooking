@@ -270,6 +270,10 @@ namespace CrewCall.Reporting.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("execution_id");
 
+                    b.Property<DateTimeOffset?>("PlannedChangedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("planned_changed_at_utc");
+
                     b.Property<DateTimeOffset?>("PlannedEndUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("planned_end_utc");
@@ -277,6 +281,10 @@ namespace CrewCall.Reporting.Data.Migrations
                     b.Property<DateTimeOffset?>("PlannedStartUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("planned_start_utc");
+
+                    b.Property<int>("RescheduleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("reschedule_count");
 
                     b.Property<Guid?>("SiteId")
                         .HasColumnType("uuid")
@@ -289,6 +297,10 @@ namespace CrewCall.Reporting.Data.Migrations
                     b.Property<Guid?>("TechnicianId")
                         .HasColumnType("uuid")
                         .HasColumnName("technician_id");
+
+                    b.Property<int>("TotalDelayMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_delay_minutes");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone")

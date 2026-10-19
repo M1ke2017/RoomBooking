@@ -19,7 +19,8 @@ public static class ReportingEventReader
         IntegrationEventCatalog.IncidentDispatched.RoutingKey,
         IntegrationEventCatalog.VisitWorkCompleted.RoutingKey,
         IntegrationEventCatalog.VisitCreated.RoutingKey,
-        IntegrationEventCatalog.VisitStatusChanged.RoutingKey
+        IntegrationEventCatalog.VisitStatusChanged.RoutingKey,
+        IntegrationEventCatalog.VisitRescheduled.RoutingKey
     ];
 
     /// <summary>
@@ -38,6 +39,7 @@ public static class ReportingEventReader
             ("visit.work-completed", 1) => typeof(VisitWorkCompletedIntegrationEvent),
             ("visit.created", 1) => typeof(VisitCreatedIntegrationEvent),
             ("visit.status-changed", 1) => typeof(VisitStatusChangedIntegrationEvent),
+            ("visit.rescheduled", 1) => typeof(VisitRescheduledIntegrationEvent),
             _ => null
         };
 

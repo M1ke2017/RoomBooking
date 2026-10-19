@@ -1,4 +1,4 @@
-using CrewCall.Contracts.Live;
+using CrewCall.Contracts.Integration;
 
 namespace CrewCall.Integrations.Live;
 
@@ -18,29 +18,36 @@ public static class LiveOperationGroups
     public static string Incident(Guid incidentId) => Build("incident", incidentId);
 
     /// <summary>
-    /// The groups a message goes to: <see cref="All"/>, plus the site, technician and incident groups of the entity it is
-    /// about and of its related entities. Each group appears once.
+    /// The groups an event's live message goes to: <see cref="All"/>, the incident's group, the technicians' groups (named
+    /// by the event or looked up) and the site's group. Each group appears once.
     /// </summary>
-    public static IReadOnlyList<string> For(LiveOperationMessage message)
+    public static IReadOnlyList<string> For(IIntegrationEvent integrationEvent, LiveRoutingContext routing)
     {
-        var groups = new List<string> { All };
-        foreach (var entity in message.Related.Prepend(new LiveEntityReference(message.EntityType, message.EntityId)))
+        var (incidentId, technicianId) = integrationEvent switch
         {
-            var group = entity.EntityType switch
-            {
-                LiveEntityTypes.Site => Site(entity.EntityId),
-                LiveEntityTypes.Technician => Technician(entity.EntityId),
-                LiveEntityTypes.Incident => Incident(entity.EntityId),
-                _ => null
-            };
+            AssignmentCreatedIntegrationEvent created => ((Guid?)null, (Guid?)created.TechnicianId),
+            IncidentDispatchedIntegrationEvent dispatched => (dispatched.IncidentId, dispatched.TechnicianId),
+            VisitRescheduledIntegrationEvent rescheduled => (rescheduled.IncidentId, null),
+            _ => (null, null)
+        };
 
-            if (group is not null && !groups.Contains(group))
-            {
-                groups.Add(group);
-            }
+        var groups = new List<string> { All };
+        if (incidentId is { } incident && incident != Guid.Empty)
+        {
+            groups.Add(Incident(incident));
         }
 
-        return groups;
+        foreach (var technician in routing.TechnicianIds.Prepend(technicianId ?? Guid.Empty).Where(id => id != Guid.Empty))
+        {
+            groups.Add(Technician(technician));
+        }
+
+        if (routing.SiteId is { } site && site != Guid.Empty)
+        {
+            groups.Add(Site(site));
+        }
+
+        return groups.Distinct().ToList();
     }
 
     // "D" format: lower-case, hyphenated, so one id always gives one group name.

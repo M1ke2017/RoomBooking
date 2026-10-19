@@ -10,7 +10,10 @@ internal sealed class TechnicianConfiguration : IEntityTypeConfiguration<Technic
     public void Configure(EntityTypeBuilder<Technician> builder)
     {
         builder.ToTable("technicians", DatabaseSchemas.Workforce, table =>
-            table.HasCheckConstraint("ck_technicians_country_code", "country_code ~ '^[A-Z]{2}$'"));
+        {
+            table.HasCheckConstraint("ck_technicians_country_code", "country_code ~ '^[A-Z]{2}$'");
+            table.HasCheckConstraint("ck_technicians_phone_number_e164", "phone_number ~ '^\\+[1-9][0-9]{6,14}$'");
+        });
 
         builder.HasKey(technician => technician.Id);
         builder.Property(technician => technician.Id).HasColumnName("id").ValueGeneratedNever();
@@ -44,6 +47,11 @@ internal sealed class TechnicianConfiguration : IEntityTypeConfiguration<Technic
             .HasMaxLength(Technician.CountryCodeLength)
             .IsFixedLength()
             .IsRequired();
+
+        // E.164, normalized by the Workforce module; optional.
+        builder.Property(technician => technician.PhoneNumber)
+            .HasColumnName("phone_number")
+            .HasMaxLength(Technician.PhoneNumberMaxLength);
 
         // Technician -> 0..1 Team. Restrict: a team with members cannot be deleted by accident.
         builder.Property(technician => technician.TeamId).HasColumnName("team_id");

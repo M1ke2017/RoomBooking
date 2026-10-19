@@ -72,7 +72,8 @@ Consumer Effect         (ops.integration_event_receipts)
 | Content | detailed payload | small explicit contract (`CrewCall.Contracts.Integration`), never an EF entity |
 
 `IntegrationEventMapper` is the explicit table from operational to integration events: a `switch` on the event type and
-payload, with no reflection. Only five events are published:
+payload, with no reflection (a static class since Sprint 15, ADR-0017 §11). Sprint 12 published only these five events;
+Sprint 14 added `visit.created` and `visit.status-changed` (ADR-0016), and Sprint 15 `visit.rescheduled` (ADR-0017):
 
 | Type (v1) | Routing key |
 |---|---|

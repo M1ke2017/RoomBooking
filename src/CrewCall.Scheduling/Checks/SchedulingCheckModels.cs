@@ -17,6 +17,21 @@ public sealed record SchedulingCheck(
     int? TravelBufferBeforeMinutes,
     int? TravelBufferAfterMinutes);
 
+/// <summary>Where a visit with these resources and length could go next (<see cref="SchedulingCheckService.FindNextAvailableSlotAsync"/>).</summary>
+/// <param name="VisitId">The visit being moved: its own reservations do not block it.</param>
+/// <param name="NotBefore">The earliest start considered (rounded up to a quarter hour).</param>
+/// <param name="NotAfter">Nothing ending after this is considered: the search horizon.</param>
+public sealed record SlotSearch(
+    Guid VisitId,
+    Guid TechnicianId,
+    Guid? VehicleId,
+    IReadOnlyCollection<Guid> EquipmentIds,
+    int TravelBufferBeforeMinutes,
+    int TravelBufferAfterMinutes,
+    TimeSpan Duration,
+    DateTimeOffset NotBefore,
+    DateTimeOffset NotAfter);
+
 public enum SchedulingConflictCode
 {
     /// <summary>F# CandidateInactive.</summary>

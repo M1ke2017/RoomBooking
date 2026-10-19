@@ -1,3 +1,4 @@
+using CrewCall.Contracts.Incidents;
 using CrewCall.Scheduling.Assignments;
 using CrewCall.Scheduling.Checks;
 using CrewCall.Scheduling.Ports;
@@ -135,4 +136,14 @@ public abstract record IncidentDispatchOutcome
 
     /// <summary>Dispatch: the final check failed, or another claim won the race; nothing was written.</summary>
     public sealed record Rejected(IReadOnlyList<SchedulingConflict> Reasons, IReadOnlyList<DispatchImpact> Impact) : IncidentDispatchOutcome;
+
+    /// <summary>Reschedule proposal (Sprint 15): advice, best first, nothing written.</summary>
+    public sealed record Proposed(IReadOnlyList<RescheduleProposal> Proposals) : IncidentDispatchOutcome;
+
+    /// <summary>Apply: the incident dispatched and the displaced visit moved, in one transaction.</summary>
+    public sealed record Rescheduled(Guid IncidentId, Guid WorkOrderId, Guid VisitId, Assignment Assignment, AffectedVisit MovedVisit)
+        : IncidentDispatchOutcome;
+
+    /// <summary>Apply: the proposal no longer matches the plan (the visit moved, started or lost its assignment); nothing was written.</summary>
+    public sealed record Stale(string Reason) : IncidentDispatchOutcome;
 }

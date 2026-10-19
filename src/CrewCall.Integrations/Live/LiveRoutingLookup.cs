@@ -5,18 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CrewCall.Integrations.Live;
 
-/// <summary>Finds the routing context an integration event does not carry (ADR-0015).</summary>
-public interface ILiveRoutingLookup
-{
-    Task<LiveRoutingContext> ResolveAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken);
-}
-
 /// <summary>
 /// A minimal read-only lookup in the operational database, once per message (never per connection): the visit's site
 /// through its work order, and the technicians of assignments the event names only by id. The v1 event contracts stay
 /// unchanged. Missing rows simply mean fewer groups.
 /// </summary>
-public sealed class DbLiveRoutingLookup(CrewCallDbContext db) : ILiveRoutingLookup
+public sealed class LiveRoutingLookup(CrewCallDbContext db)
 {
     public async Task<LiveRoutingContext> ResolveAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken) =>
         integrationEvent switch
@@ -37,14 +31,18 @@ public sealed class DbLiveRoutingLookup(CrewCallDbContext db) : ILiveRoutingLook
 
             // The technician of the visit's active assignment, if it has one.
             VisitWorkCompletedIntegrationEvent completed =>
-                new(await SiteOfVisitAsync(completed.VisitId, cancellationToken),
-                    await db.Assignments.AsNoTracking()
-                        .Where(assignment => assignment.VisitId == completed.VisitId && assignment.Status == AssignmentStatus.Active)
-                        .Select(assignment => assignment.TechnicianId)
-                        .ToListAsync(cancellationToken)),
+                new(await SiteOfVisitAsync(completed.VisitId, cancellationToken), await ActiveTechniciansOfAsync(completed.VisitId, cancellationToken)),
+            VisitRescheduledIntegrationEvent rescheduled =>
+                new(await SiteOfVisitAsync(rescheduled.VisitId, cancellationToken), await ActiveTechniciansOfAsync(rescheduled.VisitId, cancellationToken)),
 
             _ => LiveRoutingContext.None
         };
+
+    private async Task<IReadOnlyList<Guid>> ActiveTechniciansOfAsync(Guid visitId, CancellationToken cancellationToken) =>
+        await db.Assignments.AsNoTracking()
+            .Where(assignment => assignment.VisitId == visitId && assignment.Status == AssignmentStatus.Active)
+            .Select(assignment => assignment.TechnicianId)
+            .ToListAsync(cancellationToken);
 
     private async Task<Guid?> SiteOfVisitAsync(Guid visitId, CancellationToken cancellationToken) =>
         await (from visit in db.Visits.AsNoTracking()

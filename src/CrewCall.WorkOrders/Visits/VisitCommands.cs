@@ -18,6 +18,13 @@ public abstract record CreateVisitOutcome
     public sealed record WorkOrderClosed(Guid WorkOrderId, WorkOrderStatus Status) : CreateVisitOutcome;
 }
 
+/// <summary>
+/// Moves a visit to make room for an urgent incident (Sprint 15). Staged only: the caller commits it together with the
+/// incident's dispatch.
+/// </summary>
+public sealed record StageVisitReschedule(
+    Guid VisitId, DateTimeOffset NewStart, DateTimeOffset NewEnd, Guid IncidentId, Guid UrgentVisitId, Guid TechnicianId);
+
 /// <param name="Status">A <see cref="VisitStatus"/> name (case-insensitive).</param>
 public sealed record ChangeVisitStatus(Guid VisitId, string? Status);
 

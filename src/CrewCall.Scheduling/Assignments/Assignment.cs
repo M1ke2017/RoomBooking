@@ -88,6 +88,17 @@ public sealed class Assignment
         UpdatedAtUtc = now;
     }
 
+    /// <summary>
+    /// The visit moved (Sprint 15): the same resources, claimed over the new window. The assignment keeps its identity;
+    /// its reservations move with it (<see cref="Reservations.ResourceReservation.MoveTo"/>).
+    /// </summary>
+    internal void MoveClaim(DateTimeOffset claimedStart, DateTimeOffset claimedEnd, DateTimeOffset now)
+    {
+        ClaimedStart = claimedStart;
+        ClaimedEnd = claimedEnd;
+        UpdatedAtUtc = now;
+    }
+
     internal void Cancel(DateTimeOffset now)
     {
         Status = AssignmentStatus.Cancelled;

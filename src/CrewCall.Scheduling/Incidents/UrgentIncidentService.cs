@@ -18,7 +18,7 @@ namespace CrewCall.Scheduling.Incidents;
 /// Atomicity relies on the composition root resolving every module's data interface to one scoped DbContext: the work
 /// order and visit staged by WorkOrders and the claim staged here are written by the same SaveChanges and transaction.
 /// </remarks>
-public sealed class UrgentIncidentService(
+public sealed partial class UrgentIncidentService(
     IIncidentWorkOrders incidents,
     ResourceMatchingService matching,
     AssignmentService assignments,
@@ -360,7 +360,9 @@ public sealed class UrgentIncidentService(
     private async Task<IReadOnlyDictionary<Guid, Guid>> WorkOrdersOfAsync(IEnumerable<SchedulingConflict> reasons, CancellationToken cancellationToken)
     {
         var visitIds = reasons.Select(reason => reason.ReservationVisitId).OfType<Guid>().Distinct().ToList();
-        return visitIds.Count == 0 ? new Dictionary<Guid, Guid>() : await incidents.GetWorkOrderIdsAsync(visitIds, cancellationToken);
+        return visitIds.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : (await incidents.GetVisitPlansAsync(visitIds, cancellationToken)).ToDictionary(plan => plan.Key, plan => plan.Value.WorkOrderId);
     }
 
     /// <summary>Every reservation among the reasons, earliest first: what the existing plan holds there. Nothing is changed.</summary>

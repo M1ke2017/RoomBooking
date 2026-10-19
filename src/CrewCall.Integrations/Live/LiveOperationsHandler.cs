@@ -41,11 +41,11 @@ public sealed class LiveOperationsHandler(
             return LiveDeliveryResult.Unsupported;
         }
 
-        var routing = await scope.ServiceProvider.GetRequiredService<ILiveRoutingLookup>().ResolveAsync(integrationEvent, cancellationToken);
-        var message = LiveOperationMapper.Map(envelope, integrationEvent, routing);
+        var routing = await scope.ServiceProvider.GetRequiredService<LiveRoutingLookup>().ResolveAsync(integrationEvent, cancellationToken);
+        var message = LiveOperationMapper.Map(envelope, integrationEvent);
 
         // A failure here throws before anything is recorded, so the message is redelivered and broadcast again.
-        await publisher.PublishAsync(message, cancellationToken);
+        await publisher.PublishAsync(message, LiveOperationGroups.For(integrationEvent, routing), cancellationToken);
         await inbox.MarkProcessedAsync(consumerName, envelope, clock.GetUtcNow(), cancellationToken);
         return LiveDeliveryResult.Published;
     }

@@ -15,6 +15,22 @@ public interface IProjectionHandler<in TEvent> where TEvent : IIntegrationEvent
     Task ApplyAsync(TEvent integrationEvent, ProjectionContext context, CancellationToken cancellationToken);
 }
 
+/// <summary>A visit's planned window by time: the latest business change wins, whatever order its event arrived in.</summary>
+internal static class VisitPlanRules
+{
+    public static void Apply(VisitActivity visit, DateTimeOffset start, DateTimeOffset end, DateTimeOffset at)
+    {
+        if (visit.PlannedChangedAtUtc is { } current && at < current)
+        {
+            return;
+        }
+
+        visit.PlannedStartUtc = start.ToUniversalTime();
+        visit.PlannedEndUtc = end.ToUniversalTime();
+        visit.PlannedChangedAtUtc = at.ToUniversalTime();
+    }
+}
+
 /// <summary>Visit statuses by time: the latest business change wins, whatever order its event arrived in.</summary>
 internal static class VisitStatusRules
 {
@@ -139,8 +155,7 @@ public sealed class VisitCreatedProjectionHandler : IProjectionHandler<VisitCrea
         visit.CustomerId = created.CustomerId;
         visit.SiteId = created.SiteId;
         visit.WorkOrderPriority = created.WorkOrderPriority;
-        visit.PlannedStartUtc = created.PlannedStartUtc.ToUniversalTime();
-        visit.PlannedEndUtc = created.PlannedEndUtc.ToUniversalTime();
+        VisitPlanRules.Apply(visit, created.PlannedStartUtc, created.PlannedEndUtc, created.OccurredAtUtc);
         VisitStatusRules.Apply(visit, VisitStatusRules.Planned, created.OccurredAtUtc);
         visit.UpdatedAtUtc = context.Now;
 
@@ -160,6 +175,24 @@ public sealed class VisitStatusChangedProjectionHandler : IProjectionHandler<Vis
         visit.UpdatedAtUtc = context.Now;
 
         await context.RefreshVisitAttributionAsync(changed.VisitId, cancellationToken);
+    }
+}
+
+public sealed class VisitRescheduledProjectionHandler : IProjectionHandler<VisitRescheduledIntegrationEvent>
+{
+    public string Name => "VisitRescheduled";
+
+    public async Task ApplyAsync(VisitRescheduledIntegrationEvent rescheduled, ProjectionContext context, CancellationToken cancellationToken)
+    {
+        // Counted, not set: each move is its own message, and the inbox (same transaction) makes a redelivery a
+        // duplicate, so a move is never counted twice. Sums do not depend on the order the moves arrive in.
+        var visit = await context.VisitAsync(rescheduled.VisitId, cancellationToken);
+        visit.RescheduleCount++;
+        visit.TotalDelayMinutes += (int)Math.Round((rescheduled.NewStartUtc - rescheduled.OldStartUtc).TotalMinutes);
+        VisitPlanRules.Apply(visit, rescheduled.NewStartUtc, rescheduled.NewEndUtc, rescheduled.OccurredAtUtc);
+        visit.UpdatedAtUtc = context.Now;
+
+        await context.RefreshVisitAttributionAsync(rescheduled.VisitId, cancellationToken);
     }
 }
 

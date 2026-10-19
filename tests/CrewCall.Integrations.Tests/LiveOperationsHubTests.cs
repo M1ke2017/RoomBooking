@@ -28,9 +28,7 @@ public sealed class LiveOperationsHubTests : IAsyncLifetime
         await _host.Publisher.PublishAsync(message, Cancellation);
 
         var received = await client.NextAsync();
-        Assert.Equal(message.MessageId, received.MessageId);
-        Assert.Equal((message.Type, message.EntityType, message.EntityId), (received.Type, received.EntityType, received.EntityId));
-        Assert.Equal(message.Related, received.Related);
+        Assert.Equal(message.Message, received); // the whole (small) message: type, entity, time, ids
     }
 
     [Fact]
@@ -99,7 +97,8 @@ public sealed class LiveOperationsHubTests : IAsyncLifetime
     {
         var dispatched = new IncidentDispatchedIntegrationEvent(
             Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        var message = LiveOperationMapper.Map(Envelope(dispatched), dispatched, new LiveRoutingContext(Guid.NewGuid(), []));
+        var message = new LiveDelivery(
+            LiveOperationMapper.Map(Envelope(dispatched), dispatched), LiveOperationGroups.For(dispatched, new LiveRoutingContext(Guid.NewGuid(), [])));
         var unrelatedTechnician = Guid.NewGuid();
 
         await using var a = await _host.ConnectAsync();

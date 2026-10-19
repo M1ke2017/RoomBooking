@@ -20,6 +20,9 @@ public sealed class SchedulingCheckService(
     /// <summary>The longest visit that can be checked; matches the longest interval Workforce availability evaluates.</summary>
     public static readonly TimeSpan MaxVisitLength = TimeSpan.FromDays(31);
 
+    /// <summary>Candidate start times of a slot search are this far apart (quarter hours).</summary>
+    public static readonly TimeSpan SlotStep = TimeSpan.FromMinutes(15);
+
     public async Task<SchedulingCheckOutcome> CheckAsync(SchedulingCheck command, CancellationToken cancellationToken)
     {
         // 1. Validate.
@@ -158,6 +161,56 @@ public sealed class SchedulingCheckService(
             effective.Start,
             effective.End,
             reasons));
+    }
+
+    /// <summary>
+    /// FindNextAvailableSlot (Sprint 15): the first window, scanning forward in quarter hours from
+    /// <see cref="SlotSearch.NotBefore"/>, where this check passes for the visit's own resources: working hours, absences
+    /// and holidays (Workforce availability), and the technician's, vehicle's and equipment's reservations including the
+    /// travel buffers. The visit's own reservations are ignored, as for any re-plan. Read-only; null when nothing is free
+    /// before <see cref="SlotSearch.NotAfter"/>. Not an optimizer: the first feasible slot wins.
+    /// </summary>
+    public async Task<SchedulingCheckResult?> FindNextAvailableSlotAsync(SlotSearch search, CancellationToken cancellationToken)
+    {
+        var start = AlignToSlot(search.NotBefore);
+        while (start + search.Duration <= search.NotAfter)
+        {
+            var outcome = await CheckAsync(
+                new SchedulingCheck(
+                    search.VisitId, search.TechnicianId, search.VehicleId, search.EquipmentIds, start, start + search.Duration, null,
+                    search.TravelBufferBeforeMinutes, search.TravelBufferAfterMinutes),
+                cancellationToken);
+            if (outcome is not SchedulingCheckOutcome.Checked { Result: var result })
+            {
+                return null;
+            }
+
+            if (result.IsFeasible)
+            {
+                return result;
+            }
+
+            // Jump past the reservations in the way: the visit (with its buffer before) has to start after them. Anything
+            // else (working hours, an absence) is stepped over a quarter hour at a time.
+            var next = start + SlotStep;
+            var reservedUntil = result.Reasons.Select(reason => reason.ReservedEnd).OfType<DateTimeOffset>().ToList();
+            if (reservedUntil.Count > 0)
+            {
+                var afterReservations = AlignToSlot(reservedUntil.Max() + TimeSpan.FromMinutes(search.TravelBufferBeforeMinutes));
+                next = afterReservations > next ? afterReservations : next;
+            }
+
+            start = next;
+        }
+
+        return null;
+    }
+
+    private static DateTimeOffset AlignToSlot(DateTimeOffset instant)
+    {
+        var ticks = instant.UtcTicks;
+        var step = SlotStep.Ticks;
+        return new DateTimeOffset(ticks % step == 0 ? ticks : ticks - ticks % step + step, TimeSpan.Zero);
     }
 
     private static TimeSpan Buffer(ValidationErrors errors, string field, int? minutes)

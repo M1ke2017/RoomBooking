@@ -1059,6 +1059,11 @@ namespace CrewCall.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("phone_number");
+
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -1085,6 +1090,8 @@ namespace CrewCall.Persistence.Migrations
                     b.ToTable("technicians", "workforce", t =>
                         {
                             t.HasCheckConstraint("ck_technicians_country_code", "country_code ~ '^[A-Z]{2}$'");
+
+                            t.HasCheckConstraint("ck_technicians_phone_number_e164", "phone_number ~ '^\\+[1-9][0-9]{6,14}$'");
                         });
                 });
 

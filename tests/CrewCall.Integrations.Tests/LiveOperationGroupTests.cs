@@ -52,9 +52,8 @@ public sealed class LiveOperationGroupTests
         var dispatched = new IncidentDispatchedIntegrationEvent(
             Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var siteId = Guid.NewGuid();
-        var envelope = Envelope(dispatched);
 
-        var groups = LiveOperationGroups.For(LiveOperationMapper.Map(envelope, dispatched, new LiveRoutingContext(siteId, [])));
+        var groups = LiveOperationGroups.For(dispatched, new LiveRoutingContext(siteId, []));
 
         Assert.Equal(
             ["all", LiveOperationGroups.Incident(dispatched.IncidentId), LiveOperationGroups.Technician(dispatched.TechnicianId),
@@ -68,7 +67,7 @@ public sealed class LiveOperationGroupTests
         var created = new AssignmentCreatedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, []);
         var siteId = Guid.NewGuid();
 
-        var groups = LiveOperationGroups.For(LiveOperationMapper.Map(Envelope(created), created, new LiveRoutingContext(siteId, [])));
+        var groups = LiveOperationGroups.For(created, new LiveRoutingContext(siteId, []));
 
         Assert.Equal(["all", LiveOperationGroups.Technician(created.TechnicianId), LiveOperationGroups.Site(siteId)], groups);
     }
@@ -79,9 +78,24 @@ public sealed class LiveOperationGroupTests
         var completed = new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), null, 30m, 0m, 30m);
         var (siteId, technicianId) = (Guid.NewGuid(), Guid.NewGuid());
 
-        var groups = LiveOperationGroups.For(LiveOperationMapper.Map(Envelope(completed), completed, new LiveRoutingContext(siteId, [technicianId])));
+        var groups = LiveOperationGroups.For(completed, new LiveRoutingContext(siteId, [technicianId]));
 
         Assert.Equal(["all", LiveOperationGroups.Technician(technicianId), LiveOperationGroups.Site(siteId)], groups);
+    }
+
+    [Fact]
+    public void Visit_rescheduled_goes_to_all_its_incident_the_visits_technician_and_the_site()
+    {
+        var rescheduled = new VisitRescheduledIntegrationEvent(
+            Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), OccurredAt, OccurredAt.AddHours(1), OccurredAt.AddHours(3), OccurredAt.AddHours(4),
+            "UrgentIncident", Guid.NewGuid());
+        var (siteId, technicianId) = (Guid.NewGuid(), Guid.NewGuid());
+
+        var groups = LiveOperationGroups.For(rescheduled, new LiveRoutingContext(siteId, [technicianId]));
+
+        Assert.Equal(
+            ["all", LiveOperationGroups.Incident(rescheduled.IncidentId!.Value), LiveOperationGroups.Technician(technicianId), LiveOperationGroups.Site(siteId)],
+            groups);
     }
 
     [Fact]
@@ -90,9 +104,16 @@ public sealed class LiveOperationGroupTests
         var replaced = new AssignmentReplacedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var (oldTechnician, newTechnician) = (Guid.NewGuid(), Guid.NewGuid());
 
-        var groups = LiveOperationGroups.For(LiveOperationMapper.Map(
-            Envelope(replaced), replaced, new LiveRoutingContext(null, [oldTechnician, newTechnician, oldTechnician])));
+        var groups = LiveOperationGroups.For(replaced, new LiveRoutingContext(null, [oldTechnician, newTechnician, oldTechnician]));
 
         Assert.Equal(["all", LiveOperationGroups.Technician(oldTechnician), LiveOperationGroups.Technician(newTechnician)], groups);
+    }
+
+    [Fact]
+    public void Without_routing_context_a_completion_goes_to_all_only()
+    {
+        var completed = new VisitWorkCompletedIntegrationEvent(Guid.NewGuid(), OccurredAt, null, Guid.NewGuid(), Guid.NewGuid(), null, 30m, 0m, 30m);
+
+        Assert.Equal([LiveOperationGroups.All], LiveOperationGroups.For(completed, LiveRoutingContext.None));
     }
 }

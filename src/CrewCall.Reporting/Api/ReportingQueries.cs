@@ -139,7 +139,7 @@ public sealed class ReportingQueries(ReportingDbContext db, TimeProvider clock, 
             visit.VisitId, visit.WorkOrderId, visit.CustomerId, visit.SiteId, visit.TechnicianId,
             visit.PlannedStartUtc, visit.PlannedEndUtc, planned,
             visit.ActualTravelMinutes, visit.ActualGrossWorkMinutes, visit.ActualPauseMinutes, visit.ActualNetWorkMinutes,
-            variance, visit.VisitStatus, visit.CompletedAtUtc);
+            variance, visit.VisitStatus, visit.CompletedAtUtc, visit.RescheduleCount, visit.TotalDelayMinutes);
     }
 
     private Task<List<TechnicianActivityDaily>> DaysAsync(

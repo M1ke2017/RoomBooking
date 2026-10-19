@@ -33,17 +33,19 @@ internal static class LiveTestKit
 
     public static readonly DateTimeOffset OccurredAt = new(2038, 6, 1, 10, 0, 0, TimeSpan.Zero);
 
-    /// <summary>A live message about a visit, routed to the given site, technician and incident (any may be null).</summary>
-    public static LiveOperationMessage Message(Guid? siteId = null, Guid? technicianId = null, Guid? incidentId = null)
+    /// <summary>A live message about a visit, routed to all and to the given site, technician and incident (any may be null).</summary>
+    public static LiveDelivery Message(Guid? siteId = null, Guid? technicianId = null, Guid? incidentId = null)
     {
-        var related = new List<LiveEntityReference> { new(LiveEntityTypes.Visit, Guid.NewGuid()) };
-        if (siteId is { } site) related.Add(new(LiveEntityTypes.Site, site));
-        if (technicianId is { } technician) related.Add(new(LiveEntityTypes.Technician, technician));
-        if (incidentId is { } incident) related.Add(new(LiveEntityTypes.Incident, incident));
-        return new LiveOperationMessage(
-            Guid.NewGuid(), LiveOperationTypes.VisitWorkCompleted, OccurredAt, LiveEntityTypes.Visit, related[0].EntityId,
-            LiveOperationActions.Completed, null, related, null);
+        var groups = new List<string> { LiveOperationGroups.All };
+        if (incidentId is { } incident) groups.Add(LiveOperationGroups.Incident(incident));
+        if (technicianId is { } technician) groups.Add(LiveOperationGroups.Technician(technician));
+        if (siteId is { } site) groups.Add(LiveOperationGroups.Site(site));
+        return new LiveDelivery(
+            new LiveOperationMessage(Guid.NewGuid(), LiveOperationTypes.VisitWorkCompleted, Guid.NewGuid(), OccurredAt, null), groups);
     }
+
+    public static Task PublishAsync(this ILiveOperationsPublisher publisher, LiveDelivery delivery, CancellationToken cancellationToken) =>
+        publisher.PublishAsync(delivery.Message, delivery.Groups, cancellationToken);
 
     public static int FreePort()
     {
@@ -184,21 +186,27 @@ public sealed class LiveHubClient : IAsyncDisposable
     /// Asserts that the next message this client receives is <paramref name="sentinel"/>: SignalR keeps the order per
     /// connection, so anything sent to this client before the sentinel would arrive first.
     /// </summary>
-    public async Task AssertNextIsAsync(LiveOperationMessage sentinel) => Assert.Equal(sentinel.MessageId, (await NextAsync()).MessageId);
+    public async Task AssertNextIsAsync(LiveDelivery sentinel) => Assert.Equal(sentinel.MessageId, (await NextAsync()).MessageId);
 
     public ValueTask DisposeAsync() => Connection.DisposeAsync();
 }
 
-/// <summary>Records live messages instead of broadcasting them; fails while <see cref="Fail"/> is set.</summary>
+/// <summary>A live message and the groups it is sent to.</summary>
+public sealed record LiveDelivery(LiveOperationMessage Message, IReadOnlyList<string> Groups)
+{
+    public Guid MessageId => Message.MessageId;
+}
+
+/// <summary>Records live messages (and their groups) instead of broadcasting them; fails while <see cref="Fail"/> is set.</summary>
 public sealed class RecordingLivePublisher : ILiveOperationsPublisher
 {
-    public ConcurrentQueue<LiveOperationMessage> Published { get; } = new();
+    public ConcurrentQueue<LiveDelivery> Published { get; } = new();
 
     public volatile Exception? Fail;
 
     public int Calls;
 
-    public Task PublishAsync(LiveOperationMessage message, CancellationToken cancellationToken)
+    public Task PublishAsync(LiveOperationMessage message, IReadOnlyList<string> groups, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref Calls);
         if (Fail is { } failure)
@@ -206,7 +214,7 @@ public sealed class RecordingLivePublisher : ILiveOperationsPublisher
             throw failure;
         }
 
-        Published.Enqueue(message);
+        Published.Enqueue(new LiveDelivery(message, groups));
         return Task.CompletedTask;
     }
 }

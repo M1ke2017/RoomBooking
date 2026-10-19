@@ -1,6 +1,7 @@
 using CrewCall.Scheduling.Ports;
 using CrewCall.WorkOrders;
 using CrewCall.WorkOrders.Incidents;
+using CrewCall.WorkOrders.Visits;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrewCall.Api.SchedulingAdapters;
@@ -10,7 +11,7 @@ namespace CrewCall.Api.SchedulingAdapters;
 /// the work order and visit creation and the incident events stay in WorkOrders' <see cref="IncidentService"/>; this
 /// adapter only translates. Staging writes into the request's one DbContext, which Scheduling then saves and commits.
 /// </summary>
-internal sealed class WorkOrdersIncidentSource(IWorkOrdersDbContext workOrders, IncidentService incidents) : IIncidentWorkOrders
+internal sealed class WorkOrdersIncidentSource(IWorkOrdersDbContext workOrders, IncidentService incidents, VisitService visits) : IIncidentWorkOrders
 {
     public async Task<IncidentSchedulingInfo?> GetIncidentAsync(Guid incidentId, CancellationToken cancellationToken)
     {
@@ -24,6 +25,7 @@ internal sealed class WorkOrdersIncidentSource(IWorkOrdersDbContext workOrders, 
                 i.RequestedStart,
                 i.RequestedEnd,
                 i.WorkOrderId,
+                i.Priority,
                 Skills = i.RequiredSkills.Select(skill => skill.SkillCode).ToList()
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -31,7 +33,8 @@ internal sealed class WorkOrdersIncidentSource(IWorkOrdersDbContext workOrders, 
         return incident is null
             ? null
             : new IncidentSchedulingInfo(
-                incident.Id, ToState(incident.Status), incident.RequestedStart, incident.RequestedEnd, incident.Skills.Order().ToList(), incident.WorkOrderId);
+                incident.Id, ToState(incident.Status), incident.RequestedStart, incident.RequestedEnd, incident.Skills.Order().ToList(), incident.WorkOrderId,
+                ToPriority(IncidentLifecycle.ToWorkOrderPriority(incident.Priority)));
     }
 
     public async Task<IncidentStateChange> BeginAnalysisAsync(Guid incidentId, CancellationToken cancellationToken) =>
@@ -66,14 +69,36 @@ internal sealed class WorkOrdersIncidentSource(IWorkOrdersDbContext workOrders, 
         };
     }
 
-    public async Task<IReadOnlyDictionary<Guid, Guid>> GetWorkOrderIdsAsync(IReadOnlyCollection<Guid> visitIds, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Guid, VisitPlanInfo>> GetVisitPlansAsync(IReadOnlyCollection<Guid> visitIds, CancellationToken cancellationToken)
     {
         var ids = visitIds.ToList();
-        return await workOrders.Visits
-            .AsNoTracking()
-            .Where(visit => ids.Contains(visit.Id))
-            .ToDictionaryAsync(visit => visit.Id, visit => visit.WorkOrderId, cancellationToken);
+        var plans = await (
+                from visit in workOrders.Visits.AsNoTracking()
+                join workOrder in workOrders.WorkOrders.AsNoTracking() on visit.WorkOrderId equals workOrder.Id
+                where ids.Contains(visit.Id)
+                select new { visit.Id, visit.WorkOrderId, workOrder.CustomerId, workOrder.SiteId, workOrder.Priority, visit.Start, visit.End, visit.Status })
+            .ToListAsync(cancellationToken);
+
+        return plans.ToDictionary(
+            plan => plan.Id,
+            plan => new VisitPlanInfo(
+                plan.Id, plan.WorkOrderId, plan.CustomerId, plan.SiteId, ToPriority(plan.Priority), plan.Start, plan.End,
+                WorkOrdersVisitSchedulingSource.ToState(plan.Status)));
     }
+
+    public Task<bool> StageVisitRescheduleAsync(VisitReschedulePlan plan, CancellationToken cancellationToken) =>
+        visits.StageRescheduleForIncidentAsync(
+            new StageVisitReschedule(plan.VisitId, plan.NewStart, plan.NewEnd, plan.IncidentId, plan.UrgentVisitId, plan.TechnicianId),
+            cancellationToken);
+
+    private static PlanPriority ToPriority(WorkOrderPriority priority) => priority switch
+    {
+        WorkOrderPriority.Low => PlanPriority.Low,
+        WorkOrderPriority.Normal => PlanPriority.Normal,
+        WorkOrderPriority.High => PlanPriority.High,
+        WorkOrderPriority.Urgent => PlanPriority.Urgent,
+        _ => throw new InvalidOperationException($"Unhandled work order priority {priority}.")
+    };
 
     private static IncidentStateChange ToChange(ChangeIncidentOutcome outcome) => outcome switch
     {

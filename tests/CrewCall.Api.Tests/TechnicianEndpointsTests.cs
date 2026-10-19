@@ -43,6 +43,44 @@ public sealed class TechnicianEndpointsTests(CrewCallApiFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("+48601234567", "+48601234567")]
+    [InlineData(" +48 601-234-567 ", "+48601234567")]
+    [InlineData("+1 (415) 555.0100", "+14155550100")]
+    [InlineData(null, null)]
+    [InlineData("   ", null)]
+    public async Task Post_technician_stores_an_optional_phone_number_in_E164_form(string? phoneNumber, string? stored)
+    {
+        using var client = factory.CreateClient();
+        var email = UniqueEmail();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/technicians", new CreateTechnicianRequest("Anna Kowalska", email, null, "Europe/Warsaw", "PL", phoneNumber), Cancellation);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(stored, (await response.Content.ReadFromJsonAsync<TechnicianResponse>(Cancellation))!.PhoneNumber);
+        var listed = await client.GetFromJsonAsync<TechnicianResponse[]>("/api/technicians", Cancellation);
+        Assert.Equal(stored, Assert.Single(listed!, technician => technician.Email == email).PhoneNumber);
+    }
+
+    [Theory]
+    [InlineData("601234567")] // no country code
+    [InlineData("+0601234567")] // country codes do not start with 0
+    [InlineData("+48 601 234 567 890 12")] // more than 15 digits
+    [InlineData("+48123")] // too short
+    [InlineData("+48 601 ABC 567")]
+    public async Task Post_technician_with_a_phone_number_that_is_not_E164_returns_400(string phoneNumber)
+    {
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/technicians", new CreateTechnicianRequest("Anna Kowalska", UniqueEmail(), null, "Europe/Warsaw", "PL", phoneNumber), Cancellation);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>(Cancellation);
+        Assert.Equal(["phoneNumber"], problem!.Errors.Keys);
+    }
+
     [Fact]
     public async Task Post_technician_with_a_duplicate_email_returns_409()
     {

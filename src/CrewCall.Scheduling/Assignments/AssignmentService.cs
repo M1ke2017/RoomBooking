@@ -395,6 +395,45 @@ public sealed class AssignmentService(
     private static ResourceReservation Reservation(Assignment assignment, ResourceType type, Guid resourceId) =>
         new(Guid.CreateVersion7(), type, resourceId, assignment.VisitId, assignment.ClaimedStart, assignment.ClaimedEnd, assignment.Id);
 
+    /// <summary>The visit's active assignment with its equipment; tracked when it is going to change.</summary>
+    internal Task<Assignment?> FindActiveAsync(Guid visitId, bool tracked, CancellationToken token)
+    {
+        var assignments = tracked ? db.Assignments : db.Assignments.AsNoTracking();
+        return assignments
+            .Include(assignment => assignment.Equipment)
+            .SingleOrDefaultAsync(assignment => assignment.VisitId == visitId && assignment.Status == AssignmentStatus.Active, token);
+    }
+
+    /// <summary>The claim an existing assignment holds: its resources and buffers (no skills: they were checked when it was made).</summary>
+    internal static ClaimRequest ClaimOf(Assignment assignment) =>
+        new(
+            assignment.TechnicianId,
+            assignment.VehicleId,
+            assignment.Equipment.Select(equipment => equipment.EquipmentId).ToList(),
+            null,
+            assignment.TravelBufferBeforeMinutes,
+            assignment.TravelBufferAfterMinutes);
+
+    /// <summary>
+    /// The visit moved (Sprint 15): the same (tracked) assignment and its reservations take the new, feasible window.
+    /// No new assignment and no new reservation: identities are kept. Nothing is written until the caller's SaveChanges,
+    /// where the exclusion constraint and the assignment's row version guard the move.
+    /// </summary>
+    internal async Task StageMoveAsync(Assignment active, SchedulingCheckResult feasible, CancellationToken token)
+    {
+        if (!feasible.IsFeasible)
+        {
+            throw new InvalidOperationException("Only a feasible check can move a claim.");
+        }
+
+        active.MoveClaim(feasible.EffectiveStart, feasible.EffectiveEnd, StoredTime.Normalize(clock.GetUtcNow()));
+        var reservations = await db.ResourceReservations.Where(reservation => reservation.AssignmentId == active.Id).ToListAsync(token);
+        foreach (var reservation in reservations)
+        {
+            reservation.MoveTo(feasible.EffectiveStart, feasible.EffectiveEnd);
+        }
+    }
+
     private Task<Guid?> ActiveAssignmentIdAsync(Guid visitId, CancellationToken token) =>
         db.Assignments
             .Where(assignment => assignment.VisitId == visitId && assignment.Status == AssignmentStatus.Active)

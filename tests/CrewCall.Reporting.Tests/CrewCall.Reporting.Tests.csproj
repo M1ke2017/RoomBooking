@@ -2,8 +2,8 @@
 
   <!--
     Reporting tests (ADR-0016): projections, idempotency, out-of-order delivery and replay against a real PostgreSQL;
-    the consumer against a real RabbitMQ; the Reporting API; and the end-to-end path from a business operation in
-    CrewCall.Api through the outbox (CrewCall.Integrations) to a report. Testcontainers, so Docker is required.
+    the consumer against a real RabbitMQ; the Reporting API; and the end-to-end paths from a business operation in
+    CrewCall.Api through the outbox (CrewCall.Integrations) to a report and to a live SignalR client. Testcontainers, so Docker is required.
     The three hosts all have a Program class, so each is referenced under its own alias.
   -->
 
@@ -17,6 +17,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Testcontainers.RabbitMq" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
   </ItemGroup>
 
   <ItemGroup>

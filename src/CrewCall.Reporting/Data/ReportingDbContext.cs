@@ -77,6 +77,9 @@ public sealed class ReportingDbContext(DbContextOptions<ReportingDbContext> opti
             visit.Property(row => row.TechnicianId).HasColumnName("technician_id");
             visit.Property(row => row.PlannedStartUtc).HasColumnName("planned_start_utc");
             visit.Property(row => row.PlannedEndUtc).HasColumnName("planned_end_utc");
+            visit.Property(row => row.PlannedChangedAtUtc).HasColumnName("planned_changed_at_utc");
+            visit.Property(row => row.RescheduleCount).HasColumnName("reschedule_count");
+            visit.Property(row => row.TotalDelayMinutes).HasColumnName("total_delay_minutes");
             visit.Property(row => row.ExecutionId).HasColumnName("execution_id");
             visit.Property(row => row.ActualTravelMinutes).HasColumnName("actual_travel_minutes").HasPrecision(14, 4);
             visit.Property(row => row.ActualGrossWorkMinutes).HasColumnName("actual_gross_work_minutes").HasPrecision(14, 4);
