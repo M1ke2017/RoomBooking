@@ -2,26 +2,26 @@
 @attribute [StreamRendering]
 @inject SystemStatusClient StatusClient
 
-<PageTitle>CrewCall · System Status</PageTitle>
+<PageTitle>CrewCall · Stan systemu</PageTitle>
 
 <section class="panel" aria-labelledby="system-status">
     <div class="panel-header">
-        <h1 id="system-status">System Status</h1>
-        <a class="refresh" href="/status">Refresh</a>
+        <h1 id="system-status">Stan systemu</h1>
+        <a class="refresh" href="/status">Odśwież</a>
     </div>
 
     @if (status is null)
     {
-        <p class="muted">Checking…</p>
+        <p class="muted">Sprawdzanie…</p>
     }
     else
     {
         <table class="status-table">
             <thead>
                 <tr>
-                    <th scope="col">Component</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Detail</th>
+                    <th scope="col">Komponent</th>
+                    <th scope="col">Stan</th>
+                    <th scope="col">Szczegóły</th>
                 </tr>
             </thead>
             <tbody>
@@ -31,7 +31,7 @@
                     <td class="detail">@status.Api.Detail</td>
                 </tr>
                 <tr>
-                    <td>Database</td>
+                    <td>Baza danych</td>
                     <td><StatusBadge State="status.Database.State" /></td>
                     <td class="detail">@status.Database.Detail</td>
                 </tr>
@@ -39,14 +39,14 @@
         </table>
 
         <dl class="meta">
-            <dt>API service</dt>
+            <dt>Adres API</dt>
             <dd><code>@status.ApiService</code></dd>
-            <dt>Checked at</dt>
+            <dt>Sprawdzono</dt>
             <dd>@status.CheckedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</dd>
         </dl>
     }
 
-    <p class="muted"><a href="/operations">Operations</a> · <a href="/live">Live operations</a> (developer tool)</p>
+    <p class="muted"><a href="/operations">Operacje</a> · Narzędzia deweloperskie: <a href="/live">surowy strumień zdarzeń na żywo</a></p>
 </section>
 
 @code {

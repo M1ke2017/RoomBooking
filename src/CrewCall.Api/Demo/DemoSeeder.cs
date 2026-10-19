@@ -45,7 +45,7 @@ public sealed class DemoSeeder(
     WorkOrderService workOrders,
     VisitService visits,
     AssignmentService assignments,
-    VisitExecutionService executions,
+    IActiveAssignmentCheck activeAssignments,
     IncidentService incidents)
 {
     public const string TimeZoneId = "Europe/Warsaw";
@@ -108,15 +108,17 @@ public sealed class DemoSeeder(
 
         var anchor = Anchor(localNow);
 
-        // Done this morning: Jan installed air conditioning in Tychy.
+        // Done this morning: Jan installed air conditioning in Tychy (25 min travel, 85 min on site with a 15 min break).
         var done = await VisitAsync(abc, tychy, "Instalacja klimatyzacji", "Normal", anchor.AddHours(-3), anchor.AddHours(-1.5), cancellationToken);
         await AssignAsync(done, jan, transit, [], 0, cancellationToken);
-        await FieldWorkAsync(done, cancellationToken, "start-travel", "start-work", "complete");
+        await FieldWorkAsync(done, now, cancellationToken,
+            ("start-travel", anchor.AddMinutes(-205)), ("start-work", anchor.AddHours(-3)), ("pause", anchor.AddMinutes(-135)),
+            ("resume", anchor.AddHours(-2)), ("complete", anchor.AddMinutes(-95)));
 
         // In progress now: Anna lays fibre in Tychy (an active work order).
         var fibre = await VisitAsync(abc, tychy, "Montaż światłowodu", "High", anchor.AddHours(-1), anchor.AddHours(3), cancellationToken);
         await AssignAsync(fibre, anna, master, [meter], 0, cancellationToken);
-        await FieldWorkAsync(fibre, cancellationToken, "start-travel", "start-work");
+        await FieldWorkAsync(fibre, now, cancellationToken, ("start-travel", anchor.AddMinutes(-80)), ("start-work", anchor.AddHours(-1)));
 
         // Planned: Jan's routine inspection in Katowice — the visit the urgent incident will need to move.
         var inspection = await VisitAsync(abc, katowice, "Przegląd instalacji elektrycznej", "Normal", anchor.AddHours(1), anchor.AddHours(2.5), cancellationToken);
@@ -217,18 +219,30 @@ public sealed class DemoSeeder(
         _ = outcome as AssignOutcome.Assigned ?? throw Unexpected("assignment", outcome);
     }
 
-    private async Task FieldWorkAsync(Guid visitId, CancellationToken cancellationToken, params string[] steps)
+    /// <summary>
+    /// Replays the technician's field work at the planned moments (never later than now), so the history and the day's
+    /// report show real travel, work and pause times instead of zeros.
+    /// </summary>
+    private async Task FieldWorkAsync(Guid visitId, DateTimeOffset now, CancellationToken cancellationToken, params (string Step, DateTimeOffset At)[] steps)
     {
-        foreach (var step in steps)
+        foreach (var (step, at) in steps)
         {
+            var executions = new VisitExecutionService(db, activeAssignments, new FixedClock(at < now ? at : now));
             var outcome = step switch
             {
                 "start-travel" => await executions.StartTravelAsync(visitId, cancellationToken),
                 "start-work" => await executions.StartWorkAsync(visitId, cancellationToken),
+                "pause" => await executions.PauseAsync(visitId, cancellationToken),
+                "resume" => await executions.ResumeAsync(visitId, cancellationToken),
                 _ => await executions.CompleteAsync(visitId, cancellationToken)
             };
             _ = outcome as VisitExecutionOutcome.Changed ?? throw Unexpected($"field work ({step})", outcome);
         }
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private static InvalidOperationException Unexpected(string what, object outcome) =>

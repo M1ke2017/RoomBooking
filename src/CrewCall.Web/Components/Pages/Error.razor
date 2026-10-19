@@ -1,14 +1,14 @@
 @page "/Error"
 @using System.Diagnostics
 
-<PageTitle>CrewCall · Error</PageTitle>
+<PageTitle>CrewCall · Błąd</PageTitle>
 
 <section class="panel">
-    <h1>Error</h1>
-    <p>An error occurred while processing the request.</p>
+    <h1>Wystąpił błąd</h1>
+    <p>Nie udało się obsłużyć żądania. Wróć do <a href="/operations">Operacji</a> i spróbuj ponownie.</p>
     @if (!string.IsNullOrEmpty(RequestId))
     {
-        <p class="muted">Request ID: <code>@RequestId</code></p>
+        <p class="muted">Identyfikator żądania (dla zespołu technicznego): <code>@RequestId</code></p>
     }
 </section>
 

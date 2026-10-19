@@ -40,6 +40,13 @@ public sealed class DemoFlowTests(CrewCallApiFactory factory)
             (inspection.VisitStartUtc, inspection.VisitEndUtc, inspection.TechnicianName, inspection.VehicleRegistrationNumber));
         Assert.Single(demo, item => item.AssignmentId is null);
 
+        // The morning's field work happened at its planned times, so the report has real numbers to show.
+        var morning = Assert.Single(demo, item => item.FieldWorkStatus == "Completed");
+        var completed = Assert.Single(await EventsAsync(client, "visit", morning.VisitId), e => e.EventType == "VisitWorkCompleted").Payload;
+        Assert.Equal((25m, 85m, 15m, 70m),
+            (completed.GetProperty("travelDurationMinutes").GetDecimal(), completed.GetProperty("grossWorkMinutes").GetDecimal(),
+                completed.GetProperty("pauseMinutes").GetDecimal(), completed.GetProperty("netWorkMinutes").GetDecimal()));
+
         var incident = Assert.Single(board.Incidents, entry => entry.Incident.Title == DemoSeeder.IncidentTitle).Incident;
         Assert.Equal(("New", "Critical", Local(12, 45), Local(14, 15)), (incident.Status, incident.Priority, incident.RequestedStart, incident.RequestedEnd));
         var team = TeamOf(board);
