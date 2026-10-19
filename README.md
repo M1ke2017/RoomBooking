@@ -258,6 +258,9 @@ dotnet test --solution CrewCall.sln
 
   A shared environment needs an explicit migration step and real secrets (see the
   [release checklist](docs/portfolio-release-checklist.md)).
+- **Error logs on the very first start.** On a new database, EF Core logs one failed query of the not-yet-created
+  `__EFMigrationsHistory` table per service, and Reporting's database health check can time out once while its
+  migrations run. These logs show as red badges in the dashboard. They do not repeat on later starts.
 - **The report is eventually consistent.** It can be a few seconds behind the plan, and the screen says so.
 - **Polish only.** The interface is in Polish, for a Polish field-service company.
 
