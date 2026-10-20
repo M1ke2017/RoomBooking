@@ -1,0 +1,172 @@
+@page "/today"
+@inject DayloDbContext Db
+@inject TimeProvider Clock
+
+<PageTitle>Dzisiaj · Daylo</PageTitle>
+
+<header class="page-head">
+    <h1>Dzisiaj</h1>
+    <p class="muted">@DayLabel</p>
+</header>
+
+<div class="columns">
+<div class="column">
+<section aria-labelledby="urgent">
+    <h2 id="urgent">Pilne <span class="count">@incidents.Count</span></h2>
+    @if (incidents.Count == 0)
+    {
+        <p class="empty">Brak pilnych zgłoszeń.</p>
+    }
+    @foreach (var incident in incidents)
+    {
+        <article class="card card-urgent">
+            <div class="card-head">
+                <span class="tag tag-@incident.Priority.ToString().ToLowerInvariant()">@Label(incident.Priority)</span>
+                <strong>@incident.Title</strong>
+            </div>
+            <p>@incident.Customer.Name</p>
+            <p class="muted">@incident.Site.Name · @incident.Site.Address</p>
+            <p class="muted">Termin @Time(incident.RequestedStart)–@Time(incident.RequestedEnd)@(incident.RequiredSkill is { } skill ? $" · potrzebne: {skill.Name.ToLowerInvariant()}" : "")</p>
+            <p class="state">@Label(incident.Status)</p>
+        </article>
+    }
+</section>
+
+<section aria-labelledby="today">
+    <h2 id="today">Plan dnia <span class="count">@tasks.Count</span></h2>
+    @if (tasks.Count == 0)
+    {
+        <p class="empty">Brak zadań na dziś.</p>
+    }
+    @foreach (var task in tasks)
+    {
+        <article class="card task task-@task.Status.ToString().ToLowerInvariant()">
+            <div class="card-head">
+                <span class="time">@Time(task.PlannedStart)–@Time(task.PlannedEnd)</span>
+                <span class="tag tag-@task.Priority.ToString().ToLowerInvariant()">@Label(task.Priority)</span>
+                <span class="tag tag-status">@Label(task.Status)</span>
+            </div>
+            <p><strong>@task.Title</strong></p>
+            <p>@(WorkerOf(task)?.Name ?? "Bez pracownika")</p>
+            <p class="muted">@task.Customer.Name · @task.Site.Name</p>
+        </article>
+    }
+</section>
+</div>
+
+<div class="column">
+<section aria-labelledby="team">
+    <h2 id="team">Zespół <span class="count">@workers.Count</span></h2>
+    @foreach (var worker in workers)
+    {
+        <article class="card member">
+            <div class="member-text">
+                <strong>@worker.Name</strong>
+                <p class="muted">@WorkerState(worker)</p>
+            </div>
+            @if (worker.PhoneNumber is { } phone)
+            {
+                <a class="button" href="tel:@phone.Replace(" ", "")" aria-label="Zadzwoń: @worker.Name">Zadzwoń</a>
+            }
+        </article>
+    }
+</section>
+
+<section aria-labelledby="unassigned">
+    @{ var unassigned = tasks.Where(task => task.Status == WorkTaskStatus.Planned && WorkerOf(task) is null).ToList(); }
+    <h2 id="unassigned">Nieprzypisane <span class="count">@unassigned.Count</span></h2>
+    @if (unassigned.Count == 0)
+    {
+        <p class="empty">Wszystkie zadania mają pracownika.</p>
+    }
+    @foreach (var task in unassigned)
+    {
+        <article class="card">
+            <div class="card-head">
+                <span class="time">@Time(task.PlannedStart)</span>
+                <strong>@task.Title</strong>
+            </div>
+            <p class="muted">@task.Customer.Name · @task.Site.Name</p>
+        </article>
+    }
+</section>
+</div>
+</div>
+
+@code {
+    private List<WorkTask> tasks = [];
+    private List<Incident> incidents = [];
+    private List<Worker> workers = [];
+    private DateOnly day;
+
+    protected override async Task OnInitializedAsync()
+    {
+        day = WorkDay.Today(Clock.GetUtcNow());
+        var (start, end) = WorkDay.Range(day);
+
+        tasks = await Db.Tasks.AsNoTracking()
+            .Include(task => task.Customer)
+            .Include(task => task.Site)
+            .Include(task => task.Assignments.Where(a => a.Status == AssignmentStatus.Active)).ThenInclude(a => a.Worker)
+            .Where(task => task.PlannedStart < end && task.PlannedEnd > start && task.Status != WorkTaskStatus.Cancelled)
+            .OrderBy(task => task.PlannedStart)
+            .ToListAsync();
+
+        incidents = await Db.Incidents.AsNoTracking()
+            .Include(incident => incident.Customer)
+            .Include(incident => incident.Site)
+            .Include(incident => incident.RequiredSkill)
+            .Where(incident => incident.Status == IncidentStatus.New || incident.Status == IncidentStatus.Analyzed)
+            .OrderBy(incident => incident.RequestedStart)
+            .ToListAsync();
+
+        workers = await Db.Workers.AsNoTracking().Where(worker => worker.IsActive).OrderBy(worker => worker.Name).ToListAsync();
+    }
+
+    private static Worker? WorkerOf(WorkTask task) => task.Assignments.FirstOrDefault()?.Worker;
+
+    /// <summary>What the worker is doing now, or what is next for them today.</summary>
+    private string WorkerState(Worker worker)
+    {
+        var own = tasks.Where(task => WorkerOf(task)?.Id == worker.Id).ToList();
+        if (own.FirstOrDefault(task => task.Status == WorkTaskStatus.InProgress) is { } current)
+        {
+            return $"Pracuje: {current.Title} · {current.Site.Name}";
+        }
+
+        return own.FirstOrDefault(task => task.Status == WorkTaskStatus.Planned && task.PlannedEnd > Clock.GetUtcNow()) is { } next
+            ? $"Następne: {Time(next.PlannedStart)} {next.Title}"
+            : "Brak kolejnych zadań na dziś";
+    }
+
+    private static string Time(DateTimeOffset instant) => WorkDay.Local(instant).ToString("HH:mm");
+
+    private static readonly System.Globalization.CultureInfo Polish = System.Globalization.CultureInfo.GetCultureInfo("pl-PL");
+
+    private string DayLabel => day.ToDateTime(TimeOnly.MinValue).ToString("dddd, d MMMM", Polish);
+
+    private static string Label(Priority priority) => priority switch
+    {
+        Priority.Low => "Niski",
+        Priority.Normal => "Normalny",
+        Priority.High => "Wysoki",
+        _ => "Pilny"
+    };
+
+    private static string Label(WorkTaskStatus status) => status switch
+    {
+        WorkTaskStatus.Planned => "Zaplanowane",
+        WorkTaskStatus.InProgress => "W trakcie",
+        WorkTaskStatus.Completed => "Zakończone",
+        _ => "Anulowane"
+    };
+
+    private static string Label(IncidentStatus status) => status switch
+    {
+        IncidentStatus.New => "Nowe — czeka na decyzję",
+        IncidentStatus.Analyzed => "Przeanalizowane — czeka na zatwierdzenie",
+        IncidentStatus.Assigned => "Przydzielone",
+        IncidentStatus.Resolved => "Rozwiązane",
+        _ => "Anulowane"
+    };
+}

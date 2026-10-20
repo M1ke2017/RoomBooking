@@ -1,0 +1,216 @@
+/* Daylo: mobile first (390 px), cards in one column, two columns from 900 px. */
+
+:root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --border: #e3e6eb;
+    --text: #1f2933;
+    --muted: #616e7c;
+    --accent: #2f6fde;
+    --accent-text: #ffffff;
+    --urgent: #c4362f;
+    --urgent-bg: #fdecea;
+    --high-bg: #fff3dc;
+    --high-text: #8a5300;
+    --ok-bg: #e5f5ea;
+    --ok-text: #1d6b39;
+    --chip-bg: #eef1f5;
+    --chip-text: #4a5563;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #14171c;
+        --surface: #1c2027;
+        --border: #2c323c;
+        --text: #e6e9ee;
+        --muted: #9aa4b2;
+        --accent: #6b9cf2;
+        --accent-text: #0e1116;
+        --urgent: #f07a72;
+        --urgent-bg: #3a1d1b;
+        --high-bg: #3a2c12;
+        --high-text: #f2c26b;
+        --ok-bg: #173323;
+        --ok-text: #86d6a2;
+        --chip-bg: #262c35;
+        --chip-text: #b8c0cc;
+        color-scheme: dark;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+a {
+    color: var(--accent);
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: -0.01em;
+}
+
+.content {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px;
+}
+
+.page-head h1 {
+    margin: 0;
+    font-size: 26px;
+}
+
+.page-head p {
+    margin: 0 0 8px;
+}
+
+section {
+    margin-top: 20px;
+}
+
+h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 17px;
+}
+
+.count {
+    min-width: 24px;
+    padding: 0 7px;
+    border-radius: 12px;
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    font-size: 13px;
+    text-align: center;
+}
+
+.card {
+    margin-bottom: 10px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow-wrap: anywhere;
+}
+
+.card p {
+    margin: 4px 0 0;
+}
+
+.card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+
+.card-urgent {
+    border-left: 4px solid var(--urgent);
+}
+
+.task-completed {
+    opacity: 0.65;
+}
+
+.time {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.muted,
+.empty {
+    color: var(--muted);
+}
+
+.empty {
+    margin: 0;
+}
+
+.state {
+    font-weight: 600;
+}
+
+.tag {
+    padding: 1px 8px;
+    border-radius: 6px;
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tag-urgent {
+    background: var(--urgent-bg);
+    color: var(--urgent);
+}
+
+.tag-high {
+    background: var(--high-bg);
+    color: var(--high-text);
+}
+
+.task-inprogress .tag-status {
+    background: var(--ok-bg);
+    color: var(--ok-text);
+}
+
+.member {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.member-text {
+    min-width: 0;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+    /* Urgent work and the plan on the left, the team and unassigned work on the right. */
+    .columns {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        gap: 24px;
+        align-items: start;
+    }
+}

@@ -1,0 +1,21 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+
+  <!-- Local run in one command: starts PostgreSQL in Docker and the Daylo app connected to it. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <UserSecretsId>0b5d7a3e-2c41-4f0e-8d6b-9e1a4c7f2d35</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <!-- Security pin of a transitive dependency (see Directory.Packages.props). -->
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Daylo.Web\Daylo.Web.csproj" />
+  </ItemGroup>
+
+</Project>
