@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The business model: workers, tasks, incidents and the rules about them. No packages, no database, no web. -->
+
+</Project>

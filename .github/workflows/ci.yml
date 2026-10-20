@@ -20,7 +20,7 @@ env:
 jobs:
   build-and-test:
     name: Build and test
-    # ubuntu-latest provides Docker, which the API tests use to start PostgreSQL (Testcontainers).
+    # ubuntu-latest provides Docker, which the tests use to start PostgreSQL (Testcontainers).
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -34,11 +34,11 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore CrewCall.sln
+        run: dotnet restore Daylo.sln
 
       - name: Build
-        run: dotnet build CrewCall.sln --no-restore
+        run: dotnet build Daylo.sln --no-restore
 
       # global.json opts into Microsoft.Testing.Platform, where the solution is passed with --solution.
       - name: Test
-        run: dotnet test --solution CrewCall.sln --no-build
+        run: dotnet test --solution Daylo.sln --no-build

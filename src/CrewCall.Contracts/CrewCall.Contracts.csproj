@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <!--
-    Transport-agnostic contracts that cross a boundary: the REST API's request/response models (Sprint 2),
-    the published integration events (Sprint 12) and the live operations messages (Sprint 13).
-    No RabbitMQ / SignalR / gRPC / HTTP types here.
-  -->
-
-</Project>
