@@ -52,7 +52,7 @@ dotnet run --project src/Daylo.AppHost
 ```
 
 Aspire starts PostgreSQL in Docker and the Daylo app connected to it. The console prints the dashboard link. In the
-dashboard, the **daylo** resource turns *Running* and healthy; click its link to open `/today`.
+dashboard, the **daylo-web** resource turns *Running* and healthy; click its link to open `/today`.
 
 On startup in Development, Daylo applies its migrations and creates the demo day:
 

@@ -6,7 +6,7 @@ var database = builder.AddPostgres("daylo-postgres")
     .WithDataVolume()
     .AddDatabase("daylo");
 
-builder.AddProject<Projects.Daylo_Web>("daylo")
+builder.AddProject<Projects.Daylo_Web>("daylo-web")
     .WithReference(database)
     .WaitFor(database)
     .WithExternalHttpEndpoints()
